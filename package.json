@@ -1,0 +1,26 @@
+{
+  "name": "mega-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon src/index.ts --exec ts-node",
+    "test": "ts-node test/main.test.ts",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "cheerio": "^1.0.0-rc.5",
+    "lodash": "^4.17.21",
+    "mime-types": "^2.1.29",
+    "promise-fs": "^2.1.1",
+    "pump": "^3.0.0",
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^14.14.31"
+  }
+}
