@@ -2,6 +2,7 @@
   "name": "mega-api",
   "version": "1.0.0",
   "description": "",
+  "types": "src/index.ts",
   "main": "index.js",
   "scripts": {
     "start": "nodemon src/index.ts --exec ts-node",
