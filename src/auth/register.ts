@@ -5,24 +5,22 @@ import { encodePrivk, encodePubk, convertPrivk2JWK } from "../crypto/rsa";
 import cheerio from "cheerio";
 import { randomBytes, createHash } from "crypto";
 import faker from "faker";
-import Mega$Api from "../mega/api";
-import Mega$User from "../mega/user";
-import Mega from "../mega";
+import { Api, User } from "../";
 import { Schema$DataNewUser } from "../types";
 import NodeRSA from "node-rsa";
 
 export default class Register {
-  api: Mega$Api;
+  api: Api;
   firstName?: string;
   lastName?: string;
   email?: string;
   password?: string;
-  context: Mega;
+  context: any;
   aes: AES;
   mailbox: string;
-  constructor(context: Mega, dataNewUser?: Schema$DataNewUser) {
+  constructor(context, dataNewUser?: Schema$DataNewUser) {
     Object.assign(this, { ...dataNewUser, ...context });
-    this.api = new Mega$Api();
+    this.api = new Api();
   }
 
   async random() {

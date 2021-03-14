@@ -1,7 +1,6 @@
 
-import Api from "../api"
 import { AES, cryptoDecodePrivKey, cryptoRsaDecrypt, e64, formatKey, prepareKey, prepareKeyV2 } from "../crypto";
-import User from "../core/user"
+import {User, Api} from "../"
 
 interface ParamsAuth {
     email: string;
@@ -12,6 +11,11 @@ export default function login({ email, password }: ParamsAuth, options): Promise
     return new Promise(async (resolve, reject) => {
         let aes: any, userHash;
 
+        if(options.MASTER_KEY && options.SESSION_ID){
+            let { MASTER_KEY, SESSION_ID} = options
+            const user = new User({MASTER_KEY}, {SESSION_ID})
+            resolve(user)
+        }
         const api = new Api(options)
 
         let { v, s } = await api.request({ a: "us0", user: email });
@@ -45,8 +49,8 @@ export default function login({ email, password }: ParamsAuth, options): Promise
             let t = formatKey(csid);
             //decrypt privk
             const RSA_PRIVATE_KEY = cryptoDecodePrivKey(KEY_AES.decryptECB(formatKey(privk)));
-            api.sid = e64(cryptoRsaDecrypt(t, RSA_PRIVATE_KEY).slice(0, 43));
-            resolve(new User({api, KEY_AES, RSA_PRIVATE_KEY, MASTER_KEY}))
+            let sid = e64(cryptoRsaDecrypt(t, RSA_PRIVATE_KEY).slice(0, 43));
+            resolve(new User({RSA_PRIVATE_KEY, MASTER_KEY}, { SESSION_ID: sid}))
         } catch (error) {
             reject(error)
         }

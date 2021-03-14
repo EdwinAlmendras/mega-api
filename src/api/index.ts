@@ -5,6 +5,7 @@ import { e64, d64, AES } from "../crypto";
 import { EventEmitter } from "events";
 import { randomBytes } from "crypto";
 import {ERRORS} from "./errors";
+import { torSetup } from "../utils"
 const MAX_RETRIES = 7;
 
 export default class Api extends EventEmitter {
@@ -12,15 +13,17 @@ export default class Api extends EventEmitter {
   keepalive: Boolean;
   counterId: any = Math.random().toString().substr(2, 10);
   gateway: string = "https://eu.api.mega.co.nz/";
-  sid: string;
+  SESSION_ID: string;
   masterKey: any;
   sn: any;
 
-  constructor(options: { keepalive: Boolean; useTor: Boolean; }) {
+  constructor(options?: { keepalive?: Boolean; useTor?: Boolean; SESSION_ID?: string}) {
     super();
     if (!options) {
-      this.keepalive = true;
-      this.axios = axios;
+      let { useTor, keepalive, SESSION_ID} = options
+      this.SESSION_ID = SESSION_ID || ""
+      this.keepalive = keepalive || true;
+      this.axios = useTor ? torSetup({ ip: 'localhost', port: 9050}) : axios
     } else {
       this.keepalive = options.keepalive;
       this.axios = axios
@@ -28,8 +31,8 @@ export default class Api extends EventEmitter {
   }
 
   async customRequest(json, params, config  = {}){
-    let qs : { id: string; sid?: string}= { id: (this.counterId++).toString(), ...params };
-    this.sid && (qs.sid = this.sid);
+    let qs : { id: string; SESSION_ID?: string}= { id: (this.counterId++).toString(), ...params };
+    this.SESSION_ID && (qs.SESSION_ID = this.SESSION_ID);
      const response = await this.axios.post(`${this.gateway}cs?${stringify(qs)}`, [json], config)
      console.log(response)
      return response.data[0]
@@ -37,8 +40,8 @@ export default class Api extends EventEmitter {
 
   request(json: any, retryno = 0, customParams = {}, ignoreError = false): Promise<any> {
     return new Promise(async (resolve, reject) => {
-      let params : { id: string; sid?: string}= { id: (this.counterId++).toString() };
-      this.sid && (params.sid = this.sid);
+      let params : { id: string; SESSION_ID?: string}= { id: (this.counterId++).toString() };
+      this.SESSION_ID && (params.SESSION_ID = this.SESSION_ID);
       let response = (
         await this.axios.post(`${this.gateway}cs?${stringify(params)}`, [json])
       ).data[0];
@@ -72,7 +75,7 @@ export default class Api extends EventEmitter {
     return new Promise(async (resolve, reject) => {
       let response = (
         await this.axios.post(
-          `${this.gateway}sc?${stringify({ sn, sid: this.sid })}`,
+          `${this.gateway}sc?${stringify({ sn, SESSION_ID: this.SESSION_ID })}`,
           `sc?${stringify({ sn })}`
         )
       ).data;
@@ -124,7 +127,7 @@ export default class Api extends EventEmitter {
 
         let { tsid, k } = await this.request({ a: "us", user });
         this.masterKey = aes.decryptECB(d64(k));
-        this.sid = tsid;
+        this.SESSION_ID = tsid;
         await this.request({ a: "ug" });
         let { ph } = await this.request({ a: "wpdf" });
         let n = await this.request({ a: "g", p: ph });

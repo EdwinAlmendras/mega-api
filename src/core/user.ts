@@ -1,15 +1,14 @@
 import { writeFile } from "promise-fs";
 import { AES, createSalt, formatKey, deriveKeys, e64 } from "../crypto";
-import { EventEmitter } from "events";
 import Api from "../api";
 //import { Schema$File, } from "../types";
 import { parse } from "url"
-import { TemporaryEmail } from "../utils/email";
+import { EmailGenerator } from "../utils";
 import cheerio from "cheerio"
-
 import { Schema$File } from "../types";
 import Files from "../file";
 import { createHash, randomBytes } from "crypto";
+import { Interface } from "node:readline";
 
 
 /* 
@@ -51,23 +50,28 @@ NOT IMPLEMENTDE YET
 */
 
 
+
+interface Constructor$User {
+  MASTER_KEY: Buffer;
+  RSA_PRIVATE_KEY?: any[] | Boolean
+}
+
 export default class User {
   api: Api
+  SESSION_ID: string
   MASTER_KEY: Buffer;
-  RSA_PRIVATE_KEY: any[];
+  RSA_PRIVATE_KEY: any[] | Boolean;
  KEY_AES: AES
-  email: string;
-  password: string;
-
-  constructor(context) {
-    Object.assign(this, context)
+  constructor({MASTER_KEY, RSA_PRIVATE_KEY}: Constructor$User, apiOptions) {
+    this.api = new Api(apiOptions)
+    this.MASTER_KEY = MASTER_KEY
+    this.RSA_PRIVATE_KEY = RSA_PRIVATE_KEY
+    this.KEY_AES = new AES(MASTER_KEY)
   }
 
   /* RETURN FILES OBJECT */
   getFiles(){
-     const files = new Files({api: this.api, KEY_AES: this.KEY_AES})
-
-     return files
+     return new Files({api: this.api, KEY_AES: this.KEY_AES})
   }
 
   async saveSession() {
@@ -75,24 +79,22 @@ export default class User {
       "session.json",
       JSON.stringify({
         key: this.MASTER_KEY,
-        sid: this.api.sid,
+        SESSION_ID: this.api.SESSION_ID,
       })
     );
   }
 
   account(){
-      return new Account(this.api, this.email)
+      return new Account(this.api)
   }
 }
 
 
 export class Account {
     api: Api
-    email: string;
   KEY_AES: AES;
-    constructor(api, email){
+    constructor(api){
         this.api = api
-        this.email = email
     }
   info() {
     return new Promise(async (resolve) => {
@@ -136,13 +138,11 @@ export class Account {
 
 
 
-
+/* 
   async cancel() {
-    /* RESPONSE SHOULD BE 0 */
    await this.api.request({ a: 'erm', m: this.email, t: 21 })
-    /* THIS WILL BE RECEIVED EMAIL */
     if(this.email.includes("temporary-mail")){
-      let email = new TemporaryEmail({ reload: false, email: this.email})
+      let email = new EmailGenerator({ reload: false, email: this.email})
       
       let [{id}] = await email.fetch()
       let mail = await email.get(id)
@@ -151,8 +151,7 @@ export class Account {
       let link = $("a").eq(2).attr("href");
       let { hash } = parse(link);
     
-      /* HANLDE SEND CONFIRM LINK */
     }
-  }
+  } */
 }
 

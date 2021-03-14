@@ -5,7 +5,7 @@ export class Email {
   id: string;
 }
 
-export class TemporaryEmail extends Email {
+export default class TemporaryEmail extends Email {
   gateway: string = "https://www.temporary-mail.net/api/v1/mailbox/";
   mails: Array<any>;
   constructor({ email, reload }) {

@@ -17,8 +17,9 @@ let pastebin = new PastebinAPI({
 });
 
 
-const createPaste = async (data) => {
+const createPaste = async (data: string) => {
   let title = await moment().format('MMMM Do YYYY, h: mm: ss a')
+  //creating private paste
  let link = await pastebin.createPaste(data, title, null, 2)
  return link;
 }
