@@ -575,7 +575,7 @@ class DarkFiles extends Files{
         super(context)
     }
 
-
+/* 
     tags(nodeId: string, tags: string[]){
         return new Promise(async(resolve)=>{
 
@@ -584,5 +584,5 @@ class DarkFiles extends Files{
             }
             this.update({nodeId, })
         })
-    }
+    } */
 }

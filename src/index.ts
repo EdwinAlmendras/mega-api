@@ -1,6 +1,5 @@
 
-import { login } from "./auth";
-export default login 
+export * from "./auth"
 
 
 /* async function main() {

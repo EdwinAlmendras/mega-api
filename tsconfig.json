@@ -12,7 +12,7 @@
     },
     "include": ["src/**/*.*", "./bin"],
      "exclude": [
-      "./test",
+      "./tests",
       "./node_modules"
     ] 
   }

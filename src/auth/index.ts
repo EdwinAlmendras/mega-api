@@ -1,4 +1,1 @@
-import login from "./login"
-
-
-export { login }
+export { default as login } from "./login"
