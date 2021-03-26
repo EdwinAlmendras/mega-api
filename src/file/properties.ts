@@ -14,12 +14,14 @@ export default class Properties {
      * @param param
      * @param aes 
      */
-    static loadMetadata({ a, s, ts, t, k, u }: Options$LoadMetadata, aes: AES) {
+    static loadMetadata(meta: Options$LoadMetadata, aes: AES) {
+
+        let { a, s, ts, t, k, u } = meta
         /* HANDLING FILE INFO */
         let metadata: Schema$File = {
             size: s || 0,
             createdTime: ts || 0,
-            type: t,
+            type: Number(t),
             isDir: !!t,
             owner: u,
         };
@@ -64,7 +66,11 @@ export default class Properties {
         let end = 0;
         while (end < attrs.length && attrs.readUInt8(end)) end++;
         attrs = attrs.slice(0, end).toString();
-        return JSON.parse(attrs.substr(4));
+        try {
+          return JSON.parse(attrs.substr(4));
+        } catch (error) {
+           console.log("error parsing JSON") 
+        }
     }
 
     static unparse(attrs: Schema$Properties) {

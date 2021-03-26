@@ -62,3 +62,6 @@ export interface Schema$File {
     /* Key */
     k: string; //Base64 encryptrd key thats encrypted file
   }
+
+
+  export interface Params$Get { nodeId?: string; name?: string; parent?: string; stream?: Boolean }

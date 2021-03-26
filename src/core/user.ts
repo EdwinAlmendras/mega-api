@@ -10,6 +10,7 @@ import cheerio from "cheerio"
 import { Schema$File } from "../types";
 import Files from "../file";
 import { createHash, randomBytes } from "crypto";
+import { forIn } from "lodash";
 
 
 /* 
@@ -51,24 +52,35 @@ NOT IMPLEMENTDE YET
 */
 
 
-export default class User {
+export default class User extends EventEmitter {
   api: Api
+  files: Files
   MASTER_KEY: Buffer;
   RSA_PRIVATE_KEY: any[];
- KEY_AES: AES
+  KEY_AES: AES;
   email: string;
   password: string;
+  name: string;
+  user: string
 
   constructor(context) {
+    super()
     Object.assign(this, context)
   }
 
-  /* RETURN FILES OBJECT */
-  getFiles(){
-     const files = new Files({api: this.api, KEY_AES: this.KEY_AES})
-
-     return files
+  
+ async loadUser() {
+   let response = await  this.api.request({a: 'ug'})
+      this.name = response.name
+      this.user = response.u
   }
+
+  /* RETURN FILES OBJECT */
+  getFiles() {
+    this.files = new Files(this)
+    return this.files
+  }
+
 
   async saveSession() {
     await writeFile(
@@ -80,20 +92,20 @@ export default class User {
     );
   }
 
-  account(){
-      return new Account(this.api, this.email)
+  account() {
+    return new Account(this.api, this.email)
   }
 }
 
 
 export class Account {
-    api: Api
-    email: string;
+  api: Api
+  email: string;
   KEY_AES: AES;
-    constructor(api, email){
-        this.api = api
-        this.email = email
-    }
+  constructor(api, email) {
+    this.api = api
+    this.email = email
+  }
   info() {
     return new Promise(async (resolve) => {
       let response = await this.api.request({
@@ -114,24 +126,24 @@ export class Account {
     });
   }
 
-  async changeEmail({email}) {
+  async changeEmail({ email }) {
     var params = {
-        a: 'se',            // Set Email
-        aa: 'a',
-        e: email,        // The new email address
+      a: 'se',            // Set Email
+      aa: 'a',
+      e: email,        // The new email address
     }
 
     await this.api.request(params)
   }
-  async changePassword({password}) {
+  async changePassword({ password }) {
     let keys = deriveKeys(password, randomBytes(32))
-              var requestParams = {
-                  a: 'up',
-                  k: e64(keys.k),
-                  uh: e64(keys.hak),
-                  crv: e64(keys.crv)
-              };
-             await  this.api.request(requestParams)
+    var requestParams = {
+      a: 'up',
+      k: e64(keys.k),
+      uh: e64(keys.hak),
+      crv: e64(keys.crv)
+    };
+    await this.api.request(requestParams)
   }
 
 
@@ -139,18 +151,18 @@ export class Account {
 
   async cancel() {
     /* RESPONSE SHOULD BE 0 */
-   await this.api.request({ a: 'erm', m: this.email, t: 21 })
+    await this.api.request({ a: 'erm', m: this.email, t: 21 })
     /* THIS WILL BE RECEIVED EMAIL */
-    if(this.email.includes("temporary-mail")){
-      let email = new TemporaryEmail({ reload: false, email: this.email})
-      
-      let [{id}] = await email.fetch()
+    if (this.email.includes("temporary-mail")) {
+      let email = new TemporaryEmail({ reload: false, email: this.email })
+
+      let [{ id }] = await email.fetch()
       let mail = await email.get(id)
 
       let $ = cheerio.load(mail.body.html);
       let link = $("a").eq(2).attr("href");
       let { hash } = parse(link);
-    
+
       /* HANLDE SEND CONFIRM LINK */
     }
   }

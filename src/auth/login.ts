@@ -8,7 +8,7 @@ interface ParamsAuth {
     password: string;
 }
 
-export default function login({ email, password }: ParamsAuth, options?: any): Promise<any> {
+export default function login({ email, password }: ParamsAuth, options?: any): Promise<User> {
     return new Promise(async (resolve, reject) => {
         let aes: any, userHash;
 

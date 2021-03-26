@@ -1,6 +1,6 @@
 
 import { randomBytes } from "crypto"
-import { Schema$File, Schema$Properties } from "../types";
+import { GenericObject, Schema$File, Schema$Properties, Schmea$ApiFile } from "../types";
 import Api from "../api";
 import Properties from "./properties";
 import axios from "axios";
@@ -10,8 +10,11 @@ const pump = promisify(require('pump'))
 import { e64, formatKey, AES, getCipher, createDecrypterStream, constantTimeCompare, d64 } from "../crypto";
 import { parse } from "url";
 import { v4 } from "uuid";
-import { resolve } from "node:path";
 import { uniq } from "lodash"
+import { Params$Get } from "../types";
+
+let KEY_CACHE = {}
+
 export default class Files extends EventEmitter {
 
 
@@ -20,26 +23,29 @@ export default class Files extends EventEmitter {
     ID_INBOX: string;
     KEY_AES: AES
 
-    shareKeys: any;
+    shareKeys: GenericObject; //{ BUffer}
     data: any[]
     api: Api
+
+    user: string;
+    name: string
 
 
     constructor(context) {
         super()
         Object.assign(this, context)
-
     }
 
     public fetch() {
         return new Promise(async (resolve, reject) => {
             this.data = [];
-            let { ok, f } = await this.api.request({ a: "f", c: 1 });
-
+            let { ok, f }: { ok: { h: string; ha: String; k: String; }[], f: Schmea$ApiFile[] } = await this.api.request({ a: "f", c: 1 });
 
             this.shareKeys = ok.reduce((shares, share) => {
                 const handler = share.h
-                const auth = this.KEY_AES.encryptECB(Buffer.from(handler + handler))
+                const auth = this.KEY_AES.encryptECB(Buffer.from(handler + handler, "utf8"))
+                console.log(share, auth, handler)
+
                 if (constantTimeCompare(formatKey(share.ha), auth)) {
                     shares[handler] = this.KEY_AES.decryptECB(formatKey(share.k))
                 }
@@ -54,18 +60,7 @@ export default class Files extends EventEmitter {
     }
     private compose(f) {
         if (!this.data.find((e) => e.nodeId === f.h)) {
-
-
-            // decrypting file data and parsing
             let file: any = this.parse(f);
-
-
-            /*
-             F.T === FOLDER TYPE
-             1 = CLOUDDRIVE
-             2 = REBUSH BIN
-             3 = INBOX
-             */
             switch (f.t) {
                 case 2:
                     this.ID_ROOT_FOLDER = f["h"];
@@ -100,15 +95,27 @@ export default class Files extends EventEmitter {
 
         /* IF FILE HAS KEY */
         if (f.k) {
-            /*   let idKeyPairs = f.k.split("/");
-              for (let idKeyPair of idKeyPairs) {
-                let id = idKeyPair.split(":")[0];
+
+            let KEY_AES = this.KEY_AES
+            const idKeyPairs = f.k.split('/')
+            for (let idKeyPair of idKeyPairs) {
+                const id = idKeyPair.split(':')[0]
                 if (id === this.user) {
-                  f.k = idKeyPair;
-                  break;
+                    f.k = idKeyPair
+                    break
                 }
-              } */
-            Object.assign(metadata, this.loadMetadata(f));
+                const shareKey = this.shareKeys[id]
+                if (shareKey) {
+                    f.k = idKeyPair
+                    KEY_AES = KEY_CACHE[id]
+                    if (!KEY_AES) {
+                        KEY_AES = KEY_CACHE[id] = new AES(shareKey)
+                    }
+                    break
+                }
+            }
+
+            Object.assign(metadata, this.loadMetadata(f, KEY_AES));
             return metadata;
         }
         return metadata;
@@ -135,7 +142,7 @@ export default class Files extends EventEmitter {
 
 
     // OK
-    public get({ nodeId, name, stream, parent }: { nodeId?: string; name?: string; parent?: string; stream?: Boolean }, options?: any): Promise<any> {
+    public get({ nodeId, name, stream, parent }: Params$Get, options?: any): Promise<any> {
         return new Promise(async (resolve) => {
             let file: Schema$File
             if (nodeId) {
@@ -167,8 +174,18 @@ export default class Files extends EventEmitter {
     }
 
     // pOK
-    public list({ folderId, folderName }): Schema$File[] {
-        return this.data.filter(async (e) => e.parent === folderId || await this.get({ name: folderName }));
+    public list({ folderId, onlyFolders }: { folderId?: string; onlyFolders?: Boolean }): Schema$File[] {
+
+        function filterReducer(file) {
+            if (onlyFolders) {
+                if (file.parent === folderId && file.isDir) return true
+            }
+            else {
+                return file.parent === folderId
+            }
+        }
+
+        return this.data.filter(filterReducer)
     }
 
     // OK
@@ -267,7 +284,7 @@ export default class Files extends EventEmitter {
         return isDir;
     }
     //OK
-    public delete({nodeId, permanent}): Promise<void> {
+    public delete({ nodeId, permanent }): Promise<void> {
         return new Promise(async (resolve, reject) => {
             try {
                 if (permanent) {
@@ -310,7 +327,7 @@ export default class Files extends EventEmitter {
 
                 // uniquify array tags if exists
                 tags && (properties.tags = uniq(file.properties.tags.concat(tags)))
-                
+
                 let newProperties = Object.assign(file.properties, properties)
                 let unparsed = Properties.unparse(newProperties)
                 let packed = Properties.pack(unparsed);
@@ -403,78 +420,85 @@ export default class Files extends EventEmitter {
         return new Promise(async (resolve) => {
         })
     }
-    async import({ name, nodeId }, url) {
+    async import({ nodeId, url }: { nodeId?: string; url: string }) {
+
+        let self = this
         function prepareRequest(source: Schema$File, ph: Boolean = false) {
-
-            console.log(source)
+            let cipher = getCipher(source.key)
+            let packedProperties = Properties.pack(source.properties)
+            let publicHandle = source.downloadId
             let req: any = {
-                h: Array.isArray(source.downloadId) ? source.downloadId[1] : source.downloadId,
+                h: Array.isArray(publicHandle) ? publicHandle[1] : publicHandle,
                 t: source.isDir ? 1 : 0,
-                a: e64(getCipher(source.key).encryptCBC(Properties.pack(source.properties))),
-                k: e64(this.KEY_AES.encryptECB(source.key))
+                a: e64(cipher.encryptCBC(packedProperties)),
+                k: e64(self.KEY_AES.encryptECB(source.key))
             }
-
             ph && (req.h = req.ph)
             return req
         }
-        let folder = await this.get({ name, nodeId })
         let urlData = Url.parse(url)
         let source = await this.loadAttributes(urlData)
-
-        const request = urlData.isDir ? {
+        console.log(urlData)
+        const request: any = urlData.isDir ? {
             a: 'p',
-            t: folder.nodeId,
-            n: prepareRequest(source, true)
-        } : {
-            a: 'p',
-            t: folder.nodeId,
-            n: source.map(async (file: Schema$File) => await prepareRequest(file)),
+            t: nodeId || this.ID_ROOT_FOLDER,
+            n: source.map((file: Schema$File) => prepareRequest(file)),
             sm: 1,
             v: 3
+        } : {
+            a: 'p',
+            t: nodeId || this.ID_ROOT_FOLDER,
+            n: prepareRequest(source, true)
         }
 
+        if (this.shareKeys && this.shareKeys.length) {
+            request.cr = makeCryptoRequest(this, source[0]);
+        }
+
+
+        console.log(request)
         await this.api.request(request)
     }
     async loadAttributes({ isDir, downloadId, file, key }): Promise<any> {
-        const req = isDir ? {
-            a: 'f',
-            c: 1,
-            ca: 1,
-            r: 1,
-        } : {
-            a: 'g',
-            p: downloadId
-        }
 
-        let response = await this.api.customRequest(req, { n: downloadId })
-        if (this.isDir) {
-            let nodes = response.f
-            /* ROOT FOLDER */
-            let rootFolder = nodes.find(node => node.k && node.h === node.k.split(':')[0])
-            /* CORRECT */
-            let aes = key ? new AES(key) : null
-            let folder = await Properties.loadMetadata(rootFolder, aes)
-
-            let filesSource: Schema$File[] = [{ ...folder, downloadId }]
-            for (let file of nodes) {
-                if (file === rootFolder) continue
-                let childFile = Properties.loadMetadata(file, aes)
-                childFile.downloadId = downloadId
-                filesSource.push(childFile)
+        return new Promise(async (resolve, reject) => {
+            const req = isDir ? {
+                a: 'f',
+                c: 1,
+                ca: 1,
+                r: 1,
+            } : {
+                a: 'g',
+                p: downloadId
             }
 
-            return filesSource
+            let response = await this.api.customRequest(req, { n: downloadId })
+            if (isDir) {
+                let nodes = response.f
+                let rootFolder = nodes.find(node => node.k && node.h === node.k.split(':')[0])
+                let aes = key ? new AES(key) : null
+                let folder = await Properties.loadMetadata(rootFolder, aes)
+                let filesSource: Schema$File[] = [{ ...folder, downloadId }]
+                for (let file of nodes) {
+                    if (file === rootFolder) continue
+                    let childFile = Properties.loadMetadata(file, aes)
+                    childFile.downloadId = downloadId
+                    filesSource.push(childFile)
+                }
+                resolve(filesSource)
 
-        } else {
-            let properties = Properties.decrypt(response.at, key)
+            } else {
+                let properties = Properties.decrypt(response.at, key)
 
-            return {
-                size: response.s,
-                key,
-                isDir: false,
-                properties
+                resolve({
+                    size: response.s,
+                    key,
+                    isDir: false,
+                    properties
+                })
             }
-        }
+        })
+
 
     }
 }
@@ -549,7 +573,7 @@ class Url {
             );
 
             let isDir = url.path.indexOf("/folder/") >= 0;
-            console.log(key.length, "from static url")
+            console.log(key, "from static url")
             return { key: d64(key), file, downloadId, isDir };
         } else {
             // old format
@@ -570,19 +594,19 @@ function searchByNode(data: Schema$File[], nodeId: string): Schema$File {
 
 
 
-class DarkFiles extends Files{
-    constructor(context){
+class DarkFiles extends Files {
+    constructor(context) {
         super(context)
     }
 
-/* 
-    tags(nodeId: string, tags: string[]){
-        return new Promise(async(resolve)=>{
-
-            let properties = {
-                tags: 
-            }
-            this.update({nodeId, })
-        })
-    } */
+    /* 
+        tags(nodeId: string, tags: string[]){
+            return new Promise(async(resolve)=>{
+    
+                let properties = {
+                    tags: 
+                }
+                this.update({nodeId, })
+            })
+        } */
 }

@@ -27,11 +27,10 @@ export default class Api extends EventEmitter {
     }
   }
 
-  async customRequest(json, params, config  = {}){
+  async customRequest(data, params, config  = {}){
     let qs : { id: string; sid?: string}= { id: (this.counterId++).toString(), ...params };
     this.sid && (qs.sid = this.sid);
-     const response = await this.axios.post(`${this.gateway}cs?${stringify(qs)}`, [json], config)
-     console.log(response)
+     const response = await this.axios.post(`${this.gateway}cs?${stringify(qs)}`, [data], config)
      return response.data[0]
   }
 
@@ -42,6 +41,7 @@ export default class Api extends EventEmitter {
       let response = (
         await this.axios.post(`${this.gateway}cs?${stringify(params)}`, [json])
       ).data[0];
+
       if (response === 0) resolve(null)
       if (typeof response === "undefined" && !ignoreError) {
         setTimeout(async () => {
