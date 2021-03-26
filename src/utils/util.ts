@@ -1,4 +1,4 @@
-import through from 'through'
+/* import through from 'through' */
 import { Readable, Stream }  from "stream"
 export function s2b (stream): Promise<Buffer> {
   return new Promise(async (resolve, reject)=>{
@@ -34,7 +34,7 @@ export function b2s(binary):Stream {
   return readableInstanceStream;
 }
 
-export function chunkSizeSafe (size) {
+/* export function chunkSizeSafe (size) {
   let last
   return through(function (d) {
     if (last) d = Buffer.concat([last, d])
@@ -55,8 +55,8 @@ export function chunkSizeSafe (size) {
     this.emit('end')
   })
 }
-
-export function detectSize (cb) {
+ */
+/* export function detectSize (cb) {
   const chunks = []
   let size = 0
 
@@ -71,3 +71,4 @@ export function detectSize (cb) {
   })
 }
 
+ */
