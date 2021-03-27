@@ -4,7 +4,8 @@ import { GenericObject, Schema$File, Schema$Properties, Schmea$ApiFile } from ".
 import Api from "../api";
 import Properties from "./properties";
 import axios from "axios";
-import { EventEmitter, PassThrough } from "stream"
+import { PassThrough } from "stream"
+import { EventEmitter } from "events"
 import { promisify } from "util"
 const pump = promisify(require('pump'))
 import { e64, formatKey, AES, getCipher, createDecrypterStream, constantTimeCompare, d64 } from "../crypto";
