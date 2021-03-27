@@ -2,11 +2,11 @@
   "name": "mega-api",
   "version": "1.0.0",
   "description": "",
-  "types": "src/index.ts",
-  "main": "index.js",
+  "types": "lib/index.d.ts",
+  "main": "lib/index.js",
   "scripts": {
     "start": "nodemon tests/index.ts --exec ts-node",
-    "test": "ts-node test/main.test.ts",
+    "test": "nodemon tests/index.js",
     "build": "tsc"
   },
   "keywords": [],

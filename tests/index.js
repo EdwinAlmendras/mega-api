@@ -1,9 +1,7 @@
-import { login } from "../src";
 
-
-(async()=>{
-
-    let user = await login({
+const mega = require("../lib")
+async function main (){
+    let user = await mega.login({
         email: "eafeik7@gmail.com",
         password: "zxcvbnm"
     })
@@ -13,5 +11,6 @@ import { login } from "../src";
 
     await user.files.import({ url: "https://mega.nz/file/3HwgmDaR#MlmVyAdEjsuekuWBKi9zwQMJ_eyHgBwn4frMIxEdN1o"})
 
+}
 
-})()
+main()
