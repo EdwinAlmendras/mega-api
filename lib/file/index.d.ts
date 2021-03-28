@@ -17,7 +17,7 @@ export default class Files {
     private compose;
     private parse;
     private loadMetadata;
-    get({ nodeId, name, stream, parent }: Params$Get, options?: any): Promise<any>;
+    get({ nodeId, name, responseType, parent, config }: Params$Get, options?: any): Promise<any>;
     list({ folderId, onlyFolders }: {
         folderId?: string;
         onlyFolders?: Boolean;

@@ -1,4 +1,5 @@
 /// <reference types="node" />
+import { ResponseType, AxiosRequestConfig } from "axios";
 export interface Schema$File {
     nodeId?: string;
     name?: string;
@@ -53,5 +54,6 @@ export interface Params$Get {
     nodeId?: string;
     name?: string;
     parent?: string;
-    stream?: Boolean;
+    responseType?: ResponseType;
+    config?: AxiosRequestConfig;
 }

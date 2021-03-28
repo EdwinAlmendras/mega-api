@@ -4,14 +4,14 @@ import axios, { AxiosInstance } from "axios";
 import { e64, d64, AES } from "../crypto";
 import { EventEmitter } from "events";
 import { randomBytes } from "crypto";
-import {ERRORS} from "./errors";
-const MAX_RETRIES = 7;
+import { ERRORS } from "./errors";
+const MAX_RETRIES = 4;
 
 export default class Api extends EventEmitter {
   axios: AxiosInstance;
   keepalive: Boolean;
   counterId: any = Math.random().toString().substr(2, 10);
-  gateway: string = "https://eu.api.mega.co.nz/";
+  gateway = "https://eu.api.mega.co.nz/";
   sid: string;
   masterKey: any;
   sn: any;
@@ -27,44 +27,57 @@ export default class Api extends EventEmitter {
     }
   }
 
-  async customRequest(data, params, config  = {}){
-    let qs : { id: string; sid?: string}= { id: (this.counterId++).toString(), ...params };
+  async customRequest(data, params, config = {}) {
+    let qs: { id: string; sid?: string } = { id: (this.counterId++).toString(), ...params };
     this.sid && (qs.sid = this.sid);
-     const response = await this.axios.post(`${this.gateway}cs?${stringify(qs)}`, [data], config)
-     return response.data[0]
+    const response = await this.axios.post(`${this.gateway}cs?${stringify(qs)}`, [data], config)
+    return response.data[0]
   }
 
-  request(json: any, retryno = 0, customParams = {}, ignoreError = false): Promise<any> {
+  request(json, retryno = 0, ignoreError = false): Promise<any> {
     return new Promise(async (resolve, reject) => {
-      let params : { id: string; sid?: string}= { id: (this.counterId++).toString() };
-      this.sid && (params.sid = this.sid);
-      let response = (
-        await this.axios.post(`${this.gateway}cs?${stringify(params)}`, [json])
-      ).data[0];
 
-      if (response === 0) resolve(null)
-      if (typeof response === "undefined" && !ignoreError) {
-        setTimeout(async () => {
-         let response = await this.request(json, retryno + 1)
-          resolve(response)
-        }, Math.pow(2, retryno + 1) * 1e3)
-      }
-      if (typeof response === "number" && response < 0 && !ignoreError) {
-        if (response === -3) {
-          if (retryno < MAX_RETRIES) {
-            setTimeout(async () => {
-              let response = await this.request(json, retryno + 1)
-               resolve(response)
-             }, Math.pow(2, retryno + 1) * 1e3)
+      let params: { id: string; sid?: string } = {
+        id: (this.counterId++).toString()
+      };
+
+      this.sid && (params.sid = this.sid);
+
+      const url = `${this.gateway}cs?${stringify(params)}`
+      let { data, headers, status } = await this.axios.post(url, [json])
+      let response = data[0]
+      console.log(json,  response)
+      //handle respose
+      switch (true) {
+        case (response === 0):
+          resolve(null)
+          break;
+        case (typeof response === "number" && response < 0):
+          if (response === -3) {
+            (retryno < MAX_RETRIES) ? setTimeout(retry, Math.pow(2, retryno + 1) * 1e3) : reject({ error: "Server is collapsed please try later" })
           }
-        }
-        reject(ERRORS[-response]);
-      } else {
-        if (this.keepalive && response && response.sn) {
-          await this.pull(response.sn);
-        }
+          else {
+            reject(ERRORS[-response])
+          }
+          break;
+
+          case(typeof response === "undefined"):
+          setTimeout(retry, Math.pow(2, retryno + 1) * 1e3)
+
+          break;
+        default:
+          if (this.keepalive && response && response.sn) await this.pull(response.sn);
+          resolve(response);
+          break;
       }
-      resolve(response);
+
+     let self = this
+
+      async function retry() {
+        let response = await self.request(json, retryno + 1)
+        resolve(response)
+      }
+
     });
   }
 
@@ -139,3 +152,6 @@ export default class Api extends EventEmitter {
     if (this.sn) this.sn.abort();
   }
 }
+
+
+

@@ -141,31 +141,43 @@ export default class Files {
 
 
     // OK
-    public get({ nodeId, name, stream, parent }: Params$Get, options?: any): Promise<any> {
+    public get({ nodeId, name, responseType, parent, config }: Params$Get, options?: any): Promise<any> {
         return new Promise(async (resolve) => {
             let file: Schema$File
-            if (nodeId) {
-                file = searchByNode(this.data, nodeId);
-            } else if (name) {
-                file = parent
-                    ? searchByName(this.data.filter((e) => e.parent === parent), name)
-                    : searchByName(this.data, name)
-            }
-            else {
-                file = searchByNode(this.data, this.ID_ROOT_FOLDER);
-            }
-            if (stream) {
-                let resp = await this.api.request({
-                    a: 'g',
-                    g: 1,
-                    n: file.nodeId,
-                    ssl: (process.env.IS_BROWSER_BUILD || options.ssl) ? 2 : 0
-                })
-                let stream = new PassThrough()
-                await pump(await axios.get(resp.g, { responseType: "stream" }), createDecrypterStream(file.key), stream)
-                resolve(stream)
-            }
+            switch (true) {
+                case (nodeId && (responseType || config)):
+                    let resp = await this.api.request({
+                        a: 'g',
+                        g: 1,
+                        n: file.nodeId,
+                        ssl: options.ssl || 0
+                    })
 
+                    const axiosConfig = { responseType: "stream" || responseType } || config
+                    let { data } = await axios.get(resp.g, axiosConfig)
+
+                    if (config?.responseType === "stream" || responseType === "stream") {
+                        let stream = new PassThrough()
+                        await pump(data, createDecrypterStream(file.key), stream)
+                        resolve(stream)
+                    }
+                    else {
+                        resolve(data)
+                    }
+                    break;
+                case (typeof nodeId === "string"):
+                    file = searchByNode(this.data, nodeId);
+                    break;
+
+                case (typeof name === "string"):
+                    file = parent
+                        ? searchByName(this.data.filter((e) => e.parent === parent), name)
+                        : searchByName(this.data, name)
+                    break;
+
+                default:
+                    break;
+            }
             resolve(file)
 
         })

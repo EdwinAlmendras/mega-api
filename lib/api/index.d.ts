@@ -14,7 +14,7 @@ export default class Api extends EventEmitter {
         useTor: Boolean;
     });
     customRequest(data: any, params: any, config?: {}): Promise<any>;
-    request(json: any, retryno?: number, customParams?: {}, ignoreError?: boolean): Promise<any>;
+    request(json: any, retryno?: number, ignoreError?: boolean): Promise<any>;
     pull(sn: string, retryno?: number): Promise<unknown>;
     wait(uri: string, sn: string): Promise<unknown>;
     anonSession(): Promise<unknown>;
