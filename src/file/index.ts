@@ -5,7 +5,6 @@ import Api from "../api";
 import Properties from "./properties";
 import axios from "axios";
 import { PassThrough } from "stream"
-import { EventEmitter } from "events"
 import { promisify } from "util"
 const pump = promisify(require('pump'))
 import { e64, formatKey, AES, getCipher, createDecrypterStream, constantTimeCompare, d64 } from "../crypto";
@@ -16,7 +15,7 @@ import { Params$Get } from "../types";
 
 let KEY_CACHE = {}
 
-export default class Files extends EventEmitter {
+export default class Files {
 
 
     ID_ROOT_FOLDER: string;
@@ -33,7 +32,6 @@ export default class Files extends EventEmitter {
 
 
     constructor(context) {
-        super()
         Object.assign(this, context)
     }
 
@@ -355,7 +353,6 @@ export default class Files extends EventEmitter {
             if (!(regex.test(uid)) || !uid) {
                 console.log("generating new uid, matched is not valid or dont exists")
                 uid = v4()
-                this.emit("action", "ADDING UID TO FILE SOURCE")
                 await this.update({ nodeId: fileSource.nodeId, properties: { uid } })
             }
 
@@ -366,8 +363,6 @@ export default class Files extends EventEmitter {
                 target: { uid },
                 ...props
             }
-
-            this.emit("action", "SAVING UID IN TARGET SHORTCUT")
 
             let resp = await this.api.request({
                 a: "p",

@@ -1,10 +1,8 @@
-/// <reference types="node" />
 import { GenericObject, Schema$File, Schema$Properties } from "../types";
 import Api from "../api";
-import { EventEmitter } from "stream";
 import { AES } from "../crypto";
 import { Params$Get } from "../types";
-export default class Files extends EventEmitter {
+export default class Files {
     ID_ROOT_FOLDER: string;
     ID_TRASH: string;
     ID_INBOX: string;

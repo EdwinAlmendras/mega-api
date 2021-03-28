@@ -1,7 +1,6 @@
 {
-  "name": "mega-api",
+  "name": "@gxldxm/mega-api",
   "version": "1.0.0",
-  "description": "",
   "types": "lib/index.d.ts",
   "main": "lib/index.js",
   "scripts": {
@@ -23,5 +22,10 @@
   },
   "devDependencies": {
     "@types/node": "^14.14.31"
-  }
+  },
+  "directories": {
+    "lib": "lib",
+    "test": "tests"
+  },
+  "description": ""
 }
