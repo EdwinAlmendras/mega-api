@@ -1,28 +1,29 @@
 /* import through from 'through' */
-import { Readable, Stream }  from "stream"
-export function s2b (stream): Promise<Buffer> {
-  return new Promise(async (resolve, reject)=>{
-          
-  const chunks = []
-  let complete
-  stream.on('data', function (d) {
-    chunks.push(d)
+import { Readable, Stream } from "stream"
+import { pipeline as pipe } from "stream";
+export function s2b(stream): Promise<Buffer> {
+  return new Promise(async (resolve, reject) => {
+
+    const chunks = []
+    let complete
+    stream.on('data', function (d) {
+      chunks.push(d)
+    })
+    stream.on('end', function () {
+      if (!complete) {
+        complete = true
+        resolve(Buffer.concat(chunks))
+      }
+    })
+    stream.on('error', function (e) {
+      reject(e)
+    })
   })
-  stream.on('end', function () {
-    if (!complete) {
-      complete = true
-      resolve( Buffer.concat(chunks))
-    }
-  })
-  stream.on('error', function (e) {
-    reject(e)
-  })
-      })
 
 }
 
 
-export function b2s(binary):Stream {
+export function b2s(binary): Stream {
 
   const readableInstanceStream = new Readable({
     read() {
@@ -33,6 +34,7 @@ export function b2s(binary):Stream {
 
   return readableInstanceStream;
 }
+
 
 /* export function chunkSizeSafe (size) {
   let last

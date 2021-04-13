@@ -3,7 +3,7 @@ import { Tor } from "../src/utils";
 
 
 
-const mega = require("../src")
+import { login } from "../src";
 
 async function main (){
 
@@ -16,7 +16,7 @@ console.log("starting")
 let ip = response.data;
 console.log(ip); */
 
-    /* let user = await mega.login({
+    let user = await login({
         email: "eafeik7@gmail.com",
         password: "zxcvbnm"
     })
@@ -24,7 +24,10 @@ console.log(ip); */
     let files = await user.getFiles()
     await user.files.fetch()
 
-    console.log(files) */
+    let file = user.files.get({ name: "hc.jpg" })
+    console.log(file)
+    await user.files.donwload({ nodeId: file.nodeId})
+
 }
 
 main()

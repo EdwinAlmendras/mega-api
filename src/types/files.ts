@@ -1,5 +1,13 @@
 import { ResponseType, AxiosRequestConfig } from "axios";
 
+export type SSL = 0 | 1;
+
+export interface Params$GetData {
+   nodeId: string;
+   responseType?: AxiosRequestConfig["responseType"];
+   options?: { ssl: SSL,
+   config: AxiosRequestConfig }
+  }
 export interface Schema$File {
   nodeId?: string;
   name?: string;
@@ -66,10 +74,10 @@ export interface Options$LoadMetadata {
 }
 
 
-export interface Params$Get { 
-  nodeId?: string; 
-  name?: string; 
-  parent?: string; 
-  responseType?: ResponseType 
+export interface Params$Get {
+  nodeId?: string;
+  name?: string;
+  parent?: string;
+  responseType?: ResponseType
   config?: AxiosRequestConfig
 }
