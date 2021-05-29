@@ -3,15 +3,16 @@ export * from './aes';
 export * from './key';
 export * from './rsa';
 export * from './stream';
-import { AES } from "./aes";
-export declare function formatKey(key: any): Buffer;
-export declare function e64(buffer: any): any;
-export declare function d64(s: any): Buffer;
-export declare function createSalt(randomBytes: any): any;
-export declare function deriveKeys(password: any, masterKey: any): {
-    hak: Buffer;
-    crv: Buffer;
-    k: Buffer;
-    aes: AES;
+export declare function encryptBase64(buffer: Buffer): string;
+export declare function decryptBase64(data: string): Buffer;
+export declare const base64: {
+    encrypt: typeof encryptBase64;
+    decrypt: typeof decryptBase64;
 };
-export declare function constantTimeCompare(bufferA: any, bufferB: any): boolean;
+/**
+ * Create random salt for user from random bytes
+ * @param {Buffer} bytes
+ * @returns {salt}
+ */
+export declare function createSalt(bytes: Buffer): Buffer;
+export declare function constantTimeCompare(bufferA: Buffer, bufferB: Buffer): boolean;

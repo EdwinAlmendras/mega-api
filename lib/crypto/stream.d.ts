@@ -1,8 +1,14 @@
 /// <reference types="node" />
 import { Transform } from "stream";
 import { AES, CTR } from "./";
-export declare function createEncrypterStream(key: any, { start }: {
-    start: any;
+/**
+ *
+ * @param {Buffer} key its buffer
+ * @param {Object} param1 sdasd
+ * @return encrypter
+ */
+export declare function createEncrypterStream(key: Buffer, { start }: {
+    start?: number;
 }): MegaEncrypt;
 export declare class MegaEncrypt extends Transform {
     aes: AES;
@@ -14,7 +20,7 @@ export declare class MegaEncrypt extends Transform {
     });
     _transform(chunk: Buffer, encoding: string, cb: () => void): void;
 }
-export declare function createDecrypterStream(key: Buffer): any;
+export declare function createDecrypterStream(key: Buffer): MegaDecrypt;
 export declare class MegaDecrypt extends Transform {
     aes: AES;
     ctr: CTR;

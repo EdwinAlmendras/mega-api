@@ -1,16 +1,21 @@
 import { AxiosRequestConfig } from "axios";
-import { GenericObject } from "../types";
 
-export interface Constructor$Api {
-    keepalive?: Boolean; 
-    useTor?: Boolean; 
+export interface Constructor {
+    keepalive?: boolean;
+    useTor?: boolean;
     SESSION_ID?: string;
   }
 
-  export interface Options$MegaApi {keepalive?: boolean; useTor?: boolean}
-
-  
-  export interface Schmea$ApiFile {
+export interface Options$MegaApi {keepalive?: boolean; useTor?: boolean}
+export interface QueryStringApi { id: string; sid?: string }
+export interface CustomRequest {
+  data: GenericObject;
+  params: GenericObject;
+  config?: AxiosRequestConfig
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type GenericObject = { [key: string]: any };
+export interface Schmea$File {
     k?: string;
     h?: string;
     at?: string;
@@ -21,7 +26,7 @@ export interface Constructor$Api {
     a?: string;
     p?: string;
 }
-  export interface Params$Api$CustomRequest{
+export interface Params$Api$CustomRequest{
     data?: GenericObject;
     params?: GenericObject;
     configAxios?: AxiosRequestConfig

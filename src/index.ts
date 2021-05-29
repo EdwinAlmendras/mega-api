@@ -1,5 +1,5 @@
 
-export * from "./auth"
+export * from "./core"
 
 
 /* async function main() {

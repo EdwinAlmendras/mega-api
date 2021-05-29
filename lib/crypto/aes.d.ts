@@ -1,11 +1,22 @@
 /// <reference types="node" />
+export declare class AES$Encrypt {
+    key: any;
+    constructor(key?: any);
+    cbc(buffer: Buffer): Buffer;
+    ecb(buffer: Buffer): Buffer;
+    stringhash(buffer: Buffer): Buffer;
+}
+export declare class AES$Decrypt {
+    key: any;
+    constructor(key?: any);
+    cbc(buffer: Buffer): Buffer;
+    ecb(buffer: Buffer): Buffer;
+}
 export declare class AES {
-    constructor(key: any);
-    encryptCBC(buffer: any): Buffer;
-    decryptCBC(buffer: any): Buffer;
-    stringhash(buffer: any): Buffer;
-    encryptECB(buffer: any): Buffer;
-    decryptECB(buffer: any): Buffer;
+    encrypt: AES$Encrypt;
+    decrypt: AES$Decrypt;
+    key: Buffer;
+    constructor(key: Buffer);
 }
 export declare class CTR {
     encrypt: any;

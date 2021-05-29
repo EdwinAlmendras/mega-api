@@ -76,3 +76,9 @@ catch {
 }
 ```
 
+
+## Upload a url
+
+```js
+ let link = await user.files.upload({ url: "someurl", target })
+```

@@ -1,7 +1,20 @@
 import { ResponseType, AxiosRequestConfig } from "axios";
+import { PathLike } from "fs";
 
 export type SSL = 0 | 1;
 
+export interface Uplaod$Params {
+  path?: PathLike,
+  properties?: Schema$Properties,
+  url?: string;
+  options?: OptionsUplaod
+}
+
+export interface OptionsUplaod {
+  hightWauerMark?: number;
+  ssl?: SSL;
+  key: Buffer;
+}
 export interface Params$GetData {
    nodeId: string;
    responseType?: AxiosRequestConfig["responseType"];
@@ -41,7 +54,7 @@ export interface Schema$Properties {
   }
   posterUrl?: string;
   stars?: string;
-  videoMediaMetadata: {
+  videoMediaMetadata?: {
     width: number;
     heigth: number;
   },
@@ -51,13 +64,6 @@ export interface Schema$Properties {
     studios?: string[]
   };
 }
-
-
-
-
-
-
-
 export interface Options$LoadMetadata {
   /* Attributes */
   a: string; // Base64 encrypted attributes
@@ -70,7 +76,7 @@ export interface Options$LoadMetadata {
   /* Owner : user thats created */
   u: string;
   /* Key */
-  k: string; //Base64 encryptrd key thats encrypted file
+  k: string; // Base64 encryptrd key thats encrypted file
 }
 
 

@@ -1,85 +1,85 @@
-
+/* eslint-disable */
+// @ts-ignore
 // @ts-nocheck
+import crypto from "crypto";
 
-
-import crypto from "crypto"
-
-
-
-export class AES {
-  constructor (key) {
-    this.key = key
-  }
-
-  encryptCBC (buffer) {
-    const iv = Buffer.alloc(16, 0)
+export class AES$Encrypt {
+  constructor(public key = key) { }
+  cbc(buffer: Buffer): Buffer {
+    const iv = Buffer.alloc(16, 0);
     const cipher = crypto.createCipheriv('aes-128-cbc', this.key, iv)
-      .setAutoPadding(false)
+      .setAutoPadding(false);
 
-    const result = Buffer.concat([ cipher.update(buffer), cipher.final() ])
-    result.copy(buffer)
-    return result
+    const result = Buffer.concat([cipher.update(buffer), cipher.final()]);
+    result.copy(buffer);
+    return result;
   }
+  ecb(buffer: Buffer): Buffer {
+    const cipher = crypto.createCipheriv('aes-128-ecb', this.key, Buffer.alloc(0))
+      .setAutoPadding(false);
 
-  decryptCBC (buffer) {
-    const iv = Buffer.alloc(16, 0)
-    const decipher = crypto.createDecipheriv('aes-128-cbc', this.key, iv)
-      .setAutoPadding(false)
-
-    const result = Buffer.concat([ decipher.update(buffer), decipher.final() ])
-    result.copy(buffer)
-    return result
+    const result = cipher.update(buffer);
+    result.copy(buffer);
+    return result;
   }
-
-  stringhash (buffer) {
-    const h32 = [0, 0, 0, 0]
+  stringhash(buffer: Buffer): Buffer {
+    const h32 = [0, 0, 0, 0];
     for (let i = 0; i < buffer.length; i += 4) {
       if (buffer.length - i < 4) {
-        const len = buffer.length - i
-        h32[i / 4 & 3] ^= buffer.readIntBE(i, len) << (4 - len) * 8
+        const len = buffer.length - i;
+        h32[i / 4 & 3] ^= buffer.readIntBE(i, len) << (4 - len) * 8;
       } else {
-        h32[i / 4 & 3] ^= buffer.readInt32BE(i)
+        h32[i / 4 & 3] ^= buffer.readInt32BE(i);
       }
     }
-
-    let hash = Buffer.allocUnsafe(16)
+    let hash = Buffer.allocUnsafe(16);
     for (let i = 0; i < 4; i++) {
-      hash.writeInt32BE(h32[i], i * 4, true)
+      hash.writeInt32BE(h32[i], i * 4);
     }
-
-    const cipher = crypto.createCipheriv('aes-128-ecb', this.key, Buffer.alloc(0))
-    for (let i = 16384; i--;) hash = cipher.update(hash)
-
-    const result = Buffer.allocUnsafe(8)
-    hash.copy(result, 0, 0, 4)
-    hash.copy(result, 4, 8, 12)
-    return result
+    const cipher = crypto.createCipheriv('aes-128-ecb', this.key, Buffer.alloc(0));
+    for (let i = 16384; i--;) hash = cipher.update(hash);
+    const result = Buffer.allocUnsafe(8);
+    hash.copy(result, 0, 0, 4);
+    hash.copy(result, 4, 8, 12);
+    return result;
   }
+}
 
-  encryptECB (buffer) {
-    const cipher = crypto.createCipheriv('aes-128-ecb', this.key, Buffer.alloc(0))
-      .setAutoPadding(false)
+export class AES$Decrypt {
+  constructor(public key = key) { }
+  cbc(buffer: Buffer): Buffer {
+    const iv = Buffer.alloc(16, 0);
+    const decipher = crypto.createDecipheriv('aes-128-cbc', this.key, iv)
+      .setAutoPadding(false);
 
-    const result = cipher.update(buffer)
-    result.copy(buffer)
-    return result
+    const result = Buffer.concat([decipher.update(buffer), decipher.final()]);
+    result.copy(buffer);
+    return result;
   }
-
-  decryptECB (buffer) {
+  ecb(buffer: Buffer): Buffer {
     const decipher = crypto.createDecipheriv('aes-128-ecb', this.key, Buffer.alloc(0))
-      .setAutoPadding(false)
+      .setAutoPadding(false);
 
-    const result = decipher.update(buffer)
-    result.copy(buffer)
-    return result
+    const result = decipher.update(buffer);
+    result.copy(buffer);
+    return result;
+  }
+}
+export class AES {
+  encrypt: AES$Encrypt
+  decrypt: AES$Decrypt
+  key: Buffer
+  constructor(key: Buffer) {
+    this.encrypt = new AES$Encrypt(key);
+    this.decrypt = new AES$Decrypt(key);
   }
 }
 
 export class CTR {
-  encrypt: any
+  encrypt: any;
   decrypt: any
-  constructor (aes, nonce, start = 0) {
-    this.key = aes.key
+  constructor(aes, nonce, start = 0) {
+    this.key = aes.encrypt.key
     this.nonce = nonce.slice(0, 8)
 
     const iv = Buffer.alloc(16)
@@ -115,7 +115,7 @@ export class CTR {
     this.nonce.copy(this.mac, 8)
   }
 
-  condensedMac () {
+  condensedMac() {
     if (this.mac) {
       this.macs.push(this.mac)
       this.mac = undefined
@@ -134,17 +134,18 @@ export class CTR {
     return macBuffer
   }
 
-  _encrypt (buffer) {
+  _encrypt(buffer) {
+    this.encryptCipher.update(buffer).copy(buffer)
     for (let i = 0; i < buffer.length; i += 16) {
       for (let j = 0; j < 16; j++) this.mac[j] ^= buffer[i + j]
       this.mac = this.macCipher.update(this.mac)
       this.checkMacBounding()
     }
 
-    return this.encryptCipher.update(buffer).copy(buffer)
+    return buffer
   }
 
-  _decrypt (buffer) {
+  _decrypt(buffer) {
     this.decryptCipher.update(buffer).copy(buffer)
 
     for (let i = 0; i < buffer.length; i += 16) {
@@ -155,7 +156,7 @@ export class CTR {
     return buffer
   }
 
-  checkMacBounding () {
+  checkMacBounding() {
     this.pos += 16
     if (this.pos >= this.posNext) {
       this.macs.push(Buffer.from(this.mac))
@@ -170,7 +171,7 @@ export class CTR {
   }
 
   // From https://github.com/jrnewell/crypto-aes-ctr/blob/77156490fcf32870215680c8db035c01390144b2/lib/index.js#L4-L18
-  incrementCTRBuffer (buf, cnt) {
+  incrementCTRBuffer(buf, cnt) {
     const len = buf.length
     let i = len - 1
     let mod
@@ -185,4 +186,3 @@ export class CTR {
     }
   }
 }
-

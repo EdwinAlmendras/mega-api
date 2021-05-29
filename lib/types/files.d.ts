@@ -1,5 +1,26 @@
 /// <reference types="node" />
 import { ResponseType, AxiosRequestConfig } from "axios";
+import { PathLike } from "fs";
+export declare type SSL = 0 | 1;
+export interface Uplaod$Params {
+    path?: PathLike;
+    properties?: Schema$Properties;
+    url?: string;
+    options?: OptionsUplaod;
+}
+export interface OptionsUplaod {
+    hightWauerMark?: number;
+    ssl?: SSL;
+    key: Buffer;
+}
+export interface Params$GetData {
+    nodeId: string;
+    responseType?: AxiosRequestConfig["responseType"];
+    options?: {
+        ssl: SSL;
+        config: AxiosRequestConfig;
+    };
+}
 export interface Schema$File {
     nodeId?: string;
     name?: string;
@@ -32,7 +53,7 @@ export interface Schema$Properties {
     };
     posterUrl?: string;
     stars?: string;
-    videoMediaMetadata: {
+    videoMediaMetadata?: {
         width: number;
         heigth: number;
     };

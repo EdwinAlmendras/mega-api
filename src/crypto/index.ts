@@ -1,83 +1,59 @@
-// @ts-nocheck
 
 export * from './aes';
 export * from './key';
 export * from './rsa';
 export * from './stream';
-
-import { AES } from "./aes";
-
-export function formatKey(key): Buffer {
-return typeof key === "string" ? d64(key) : key;
-}
-
+import { createHash } from 'crypto';
 // URL Safe Base64 encode/decode
-export function e64(buffer) {
+export function encryptBase64(buffer: Buffer): string {
   if (typeof buffer === "string") buffer = Buffer.from(buffer, "utf8");
   return buffer
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=/g, "");
 }
 
-export function d64(s) {
-  s = s.replace(/\-/g, "+").replace(/_/g, "/").replace(/,/g, "");
-  return Buffer.from(s, "base64");
+export function decryptBase64(data: string): Buffer {
+  data = data
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .replace(/,/g, "");
+  return Buffer.from(data, "base64");
 }
 
+export const base64 = {
+  encrypt: encryptBase64,
+  decrypt: decryptBase64,
+};
 
-export function createSalt(randomBytes) {
-  var String = "mega.nz";
-  var StringMaxLength = 200; // 200 chars for 'mega.nz' + padding
-  var HashInputLength = StringMaxLength + randomBytes.length; // 216 bytes
-  for (var i = String.length; i < StringMaxLength; i++) {
-    String += "P";
+
+/**
+ * Create random salt for user from random bytes
+ * @param {Buffer} bytes
+ * @returns {salt}
+ */
+export function createSalt(bytes: Buffer): Buffer {
+  let mega = "mega.nz";
+  const maxLength = 200; // 200 chars for 'mega.nz' + padding
+  const hashLength = maxLength + bytes.length; // 216 bytes
+  for (let i = mega.length; i < maxLength; i++) {
+    mega += "P";
   }
-  var StringBytes = Buffer.from(String);
-  var byteconcat = new Uint8Array(HashInputLength);
-  byteconcat.set(StringBytes);
-  byteconcat.set(randomBytes, StringMaxLength);
-  var Bytes = createHash("sha256").update(byteconcat).digest();
-  return Bytes;
+  const megaBytes = Buffer.from(mega);
+  const byteconcat = new Uint8Array(hashLength);
+  byteconcat.set(megaBytes);
+  byteconcat.set(bytes, maxLength);
+  return createHash("sha256").update(byteconcat).digest();
 }
 
 
-export function deriveKeys(password, masterKey): { hak: Buffer; crv: Buffer, k: Buffer, aes: AES}{
-
-
-  let crv = randomBytes(16);
-  let salt = createSalt(crv);
-  let deriveKey = prepareKeyV2(Buffer.from(password, "utf8"), salt);
-  let passwordKey = deriveKey.subarray(0, 16);
-  let hashAuthKey = deriveKey.slice(16, 32);
-
-  let KEY_AES = new AES(passwordKey);
-  
-  hak = createHash("sha256")
-    .update(hashAuthKey)
-    .digest()
-    .subarray(0, 16);
-
-
-    return {
-crv,
-k: KEY_AES.encryptECB(masterKey),
-hak,
-aes: KEY_AES
-    }
-}
-
-
-export function constantTimeCompare(bufferA, bufferB) {
+export function constantTimeCompare(bufferA: Buffer, bufferB: Buffer): boolean {
   if (bufferA.length !== bufferB.length) return false;
-
   const len = bufferA.length;
   let result = 0;
-
   for (let i = 0; i < len; i++) {
     result |= bufferA[i] ^ bufferB[i];
   }
-
   return result === 0;
 }

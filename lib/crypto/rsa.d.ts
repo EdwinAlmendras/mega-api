@@ -8,8 +8,7 @@
  */
 export declare function cryptoDecodePrivKey(privk: any): false | any[];
 export declare function convertPrivk2JWK(privk: any): any[];
-export declare function encodePrivk(privk: any): string;
-export declare function encodePubk(pubkey: any): string;
+export declare function encodePrivk(privk: string[]): string;
 /**
  * cryptoRsaDecrypt
  * @public
@@ -18,4 +17,6 @@ export declare function encodePubk(pubkey: any): string;
  * @return Buffer Decrypted plaintext
  * @source https://github.com/meganz/webclient/blob/4d95863d2cdbfb7652d16acdff8bae4b64056549/js/crypto.js#L1468
  */
-export declare function cryptoRsaDecrypt(ciphertext: any, privkey: any): Buffer;
+export declare function cryptoRsaDecrypt(ciphertext: {
+    toString: (arg0: string) => any;
+}, privkey: boolean | any[]): Buffer;

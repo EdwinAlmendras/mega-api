@@ -6,32 +6,41 @@ export class Email {
 }
 
 export class TemporaryEmail extends Email {
-  gateway: string = "https://www.temporary-mail.net/api/v1/mailbox/";
+  gateway = "https://www.temporary-mail.net/api/v1/mailbox/";
   mails: Array<any>;
-  constructor({ email, reload }) {
+  static mailbox: string;
+  static email: string;
+  constructor({ email, reload }: { email: string; reload?: boolean}) {
     super();
-    if (!email) {
-    }
     this.email = email;
     this.id = email.split("@")[0];
     if (reload) {
       setInterval(this.fetch, 5000);
     }
   }
+  static async generateRandomMail(): Promise<string> {
+    const mailbox = (
+      await axios.get(
+          "https://www.temporary-mail.net/api/v1/mailbox/keepalive?mailbox=",
+      )
+    ).data.mailbox;
+    const email = mailbox + "@temporary-mail.net";
+    return (email);
+  }
 
-  async fetch() {
-    let { data } = await axios.get(`${this.gateway}/${this.id}`);
+  async fetch(): Promise<any[]> {
+    const { data } = await axios.get(`${this.gateway}/${this.id}`);
     this.mails = data;
     return data;
   }
 
-  async get(id) {
-    let { data } = await axios.get(`${this.gateway}/${this.id}/${id}`);
+  async get(id): Promise<any> {
+    const { data } = await axios.get(`${this.gateway}/${this.id}/${id}`);
     return data;
   }
 
-  async new() {
-    let { data } = await axios.get(`${this.gateway}/keepalive?mailbox=`);
+  async new(): Promise<void> {
+    const { data } = await axios.get(`${this.gateway}/keepalive?mailbox=`);
     this.id = data.mailbox;
   }
 }

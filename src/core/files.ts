@@ -1,35 +1,26 @@
 /* eslint-disable require-jsdoc */
 /* eslint-disable no-async-promise-executor */
 import tiktok, { Options as TikTokOptions } from "tiktok-scraper";
+import { UploaderInternal } from "./files.uploader-internal";
 import { randomBytes } from "crypto";
-import { GenericObject, Schema$File, Schema$Properties, Schmea$ApiFile } from "../types";
-import Api from "../api";
-import { s2b } from "../utils";
+import { GenericObject, Schema$File, Schema$Properties,  } from "../types";
+import { MegaClient } from "./";
 import Properties from "./properties";
-import axios, { AxiosResponse } from "axios";
+import { AxiosResponse } from "axios";
 import { PassThrough } from "stream";
-import * as megaCrypto from "../crypto";
-import { parse } from "url";
 import { v4 } from "uuid";
 import { uniq } from "lodash";
 import { Params$GetData } from "../types";
 import EventEmitter from "events";
-import path, { basename } from "path";
 // import {pipeline} from "stream";
-import { Readable } from "stream";
-import { createWriteStream } from "fs";
-import { Stream } from "node:stream";
+import { MegaApiClient } from "./api";
 const KEY_CACHE = {};
-const hashes = [];
-const { e64,
-  formatKey,
+import { base64,
   AES,
   getCipher,
   createDecrypterStream,
-  constantTimeCompare,
-  d64,
-  createEncrypterStream } = megaCrypto;
-const TYPE_FILE_DATA = ["file", "thumbnail", "preview"];
+  constantTimeCompare } from "../crypto";
+// const TYPE_FILE_DATA = ["file", "thumbnail", "preview"];
 
 
 interface Params$Tiktok { user?: string; hashtag?: string; music?: string }
@@ -37,12 +28,9 @@ interface Params$Tiktok { user?: string; hashtag?: string; music?: string }
  * Class uploader - return instance upload - for upload any into folder
  */
 export class Uploader {
-  api: Api
   FOLDER_ROOT: string
   // eslint-disable-next-line require-jsdoc
-  constructor(context: { api: Api, FOLDER_ROOT: string }) {
-    this.api = context.api;
-    this.FOLDER_ROOT = context.FOLDER_ROOT;
+  constructor(public client: MegaApiClient) {
   }
 
   /**
@@ -59,9 +47,10 @@ export class Uploader {
     } else if (music) {
       response = await tiktok.user(user, options);
     }
-    for await (const video of response.collector) {
+    console.log(response);
+    /*  for await (const {} of response.collector) {
 
-    }
+    } */
   }
 }
 
@@ -70,32 +59,18 @@ export class Uploader {
  * Main class files for every purpose file
  */
 export default class Files extends EventEmitter {
-  private ID_ROOT_FOLDER: string;
-  private ID_TRASH: string;
-  private ID_INBOX: string;
-  private KEY_AES: AES;
-
-  private shareKeys: GenericObject; // { BUffer}
-  private data: Schema$File[]
-  protected api: Api
-
-  private readonly user: string;
-  private readonly name: string
-
-
-  /**
-   * Constructor
-   * @param {Object} context create a instance for Files
-   */
-  constructor(context: {
-    KEY_AES: AES;
-    user: string;
-    name: string;
-  }) {
+  public ID_ROOT_FOLDER: string;
+  public ID_TRASH: string;
+  public ID_INBOX: string;
+  public shareKeys: GenericObject; // { BUffer}
+  public data: Schema$File[];
+  private KEY_AES: AES
+  private api: MegaApiClient;
+  constructor(private client: MegaClient) {
     super();
-    Object.assign(this, context);
+    this.KEY_AES = this.client.state.KEY_AES;
+    this.api = this.client.api;
   }
-
   /**
    * fetch fetch all mount files for user storage
    * @return {null}
@@ -104,9 +79,10 @@ export default class Files extends EventEmitter {
     return new Promise(async (resolve, reject) => {
       this.data = [];
 
-      let response: { ok: { h: string; ha: string; k: string; }[], f: Schmea$ApiFile[] };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let response: { ok: { h: string; ha: string; k: string; }[], f: any[] };
       try {
-        response = await this.api.request({
+        response = await this.client.api.request({
           a: "f",
           c: 1,
         });
@@ -117,11 +93,11 @@ export default class Files extends EventEmitter {
 
       this.shareKeys = ok.reduce((shares, share) => {
         const handler = share.h;
-        const auth = this.KEY_AES.encryptECB(Buffer.from(handler + handler, "utf8"));
+        const auth = this.KEY_AES.encrypt.ecb(Buffer.from(handler + handler, "utf8"));
         console.log(share, auth, handler);
 
-        if (constantTimeCompare(formatKey(share.ha), auth)) {
-          shares[handler] = this.KEY_AES.decryptECB(formatKey(share.k));
+        if (constantTimeCompare(base64.decrypt(share.ha), auth)) {
+          shares[handler] = this.KEY_AES.decrypt.ecb(base64.decrypt(share.k));
         }
         return shares;
       }, {});
@@ -138,20 +114,20 @@ export default class Files extends EventEmitter {
    * @param {Object} f
    * @returns {void}
    */
-  private compose(f) {
+  public compose(f) {
     if (!this.data.find((e) => e.nodeId === f.h)) {
       const file = this.parse(f);
       switch (f.t) {
         case 2:
-          this.ID_ROOT_FOLDER = f["h"];
+          this.ID_ROOT_FOLDER = this.client.state.ID_ROOT_FOLDER = f["h"];
           file.name = "Cloud Drive";
           break;
         case 3:
-          this.ID_TRASH = f["h"];
+          this.ID_TRASH = this.client.state.ID_TRASH = f["h"];
           file.name = "Rubbish Bin";
           break;
         case 4:
-          this.ID_INBOX = f["h"];
+          this.ID_INBOX = this.client.state.ID_FOLDER_INBOX = f["h"];
           file.name = "Inbox";
           break;
 
@@ -185,7 +161,7 @@ export default class Files extends EventEmitter {
       const idKeyPairs = f.k.split("/");
       for (const idKeyPair of idKeyPairs) {
         const id = idKeyPair.split(":")[0];
-        if (id === this.user) {
+        if (id === this.client.state.USER_ID) {
           f.k = idKeyPair;
           break;
         }
@@ -223,8 +199,8 @@ export default class Files extends EventEmitter {
     };
 
     const parts = file.k.split(":");
-    const key = formatKey(parts[parts.length - 1]);
-    metadata.key = aes ? aes.decryptECB(key) : this.KEY_AES.decryptECB(key);
+    const key = base64.decrypt(parts[parts.length - 1]);
+    metadata.key = aes ? aes.decrypt.ecb(key) : this.client.state.KEY_AES.decrypt.ecb(key);
     if (file.a) {
       const properties = Properties.decrypt(file.a, key);
       metadata = {
@@ -234,6 +210,12 @@ export default class Files extends EventEmitter {
     }
     return metadata;
   }
+
+  /**
+   * Gets download url from node
+   * @param param0
+   * @returns
+   */
 
   /**
    * Get - gets a file data by name or nodeid
@@ -247,7 +229,40 @@ export default class Files extends EventEmitter {
         searchByName(this.data.filter((e) => e.parent === parent), name) :
         searchByName(this.data, name);
   }
+  /*
+  https://gfs270n075.userstorage.mega.co.nz/dl/Yp-H9qmmVgPHKwJe6p0SCR-05g-YZsIaltDB-nITbFlGrYj3dQtMXAIpPgRDdPcHkz6w6TW_caJZJN-P31WLUpkU0a0KLEIisUUVV_o9SsGjjDLdXfLYaQ/0-121832
 
+  https://gfs270n080.userstorage.mega.co.nz/ul/bLGqPVtfD48PhAJVJ79WubAfmXrJ58NPulkYWUyTV3uT_NZV8P1bYtEy6dXlaagrt0l7FJm4NtTmfwYwQqvF8A/0?c=YMHzpw_K4YHxQ826
+  first uplaod
+
+thumbnail preview
+  [{"a":"ufa","s":6416,"ssl":1},{"a":"ufa","s":53504,"ssl":1},{"a":"ping"}]
+
+
+  0: {,…}
+p: "https://gfs270n861.userstorage.mega.co.nz/OgS-QwtYiVKHngfB2B6RuopFq2pP8W9Sc_cA68yLpzGSpSvnW7kenkhW25P4oBaex73B6g"
+1: {,…}
+p: "https://gfs270n896.userstorage.mega.co.nz/6OICka10omb1LQfT6IDpJ9m2fV4lNW8mI5QX3VIxS5lvMgYzsvycmVn07Me8jsSZzGzkdA"
+2: -2
+
+  POST THE RECEIVE THE URLS FOR UPLOAD THUMB AND PREV
+  https://gfs270n861.userstorage.mega.co.nz/OgS-QwtYiVKHngfB2B6RuopFq2pP8W9Sc_cA68yLpzGSpSvnW7kenkhW25P4oBaex73B6g ADD 0
+  https://gfs270n861.userstorage.mega.co.nz/OgS-QwtYiVKHngfB2B6RuopFq2pP8W9Sc_cA68yLpzGSpSvnW7kenkhW25P4oBaex73B6g/0
+
+  ADD 1 https://gfs270n896.userstorage.mega.co.nz/6OICka10omb1LQfT6IDpJ9m2fV4lNW8mI5QX3VIxS5lvMgYzsvycmVn07Me8jsSZzGzkdA/1
+
+
+  0: {a: "p", t: "3WIFyQ7R", n: [{t: 0, h: "DFpjFKYf1I4MJUoETsyflihopVBhzh03WGHgesFbrSNjb0wB",…}],…}
+a: "p"
+i: "bOw2uhtJjh"
+n: [{t: 0, h: "DFpjFKYf1I4MJUoETsyflihopVBhzh03WGHgesFbrSNjb0wB",…}]
+0: {t: 0, h: "DFpjFKYf1I4MJUoETsyflihopVBhzh03WGHgesFbrSNjb0wB",…}
+a: "KMwLcFzyeiLkrTYPUMQi0N7G2igGr2vljN6cWZIEL9OOi7nd7MwRwxh-E8Dbkq7sLR_QAKlmuNaqVkvvy13Ai-4XWAIkbErKVy0u14BpcE0"
+fa: false
+h: "DFpjFKYf1I4MJUoETsyflihopVBhzh03WGHgesFbrSNjb0wB"
+k: "5EThrZvP5HhAKZBRCPrDhsah7pDwWOeWX31vxTrwd5M"
+t: 0
+t: "3WIFyQ7R" */
   /**
    * Gets data from file, customizable with responseType oprion
    * @param {Object}
@@ -295,285 +310,6 @@ export default class Files extends EventEmitter {
     });
   }
 
-  /**
-   * Downloads files with nodeId to dest path
-   * @param {Object}
-   * @returns {string}
-  */
-  public donwload({ nodeId, filePath, options }:
-    { nodeId: string; filePath?: string; options?: { silent: boolean; highWaterMark: number } }):
-    Promise<string> {
-    return new Promise(async (resolve, reject) => {
-      options ||= {
-        silent: true,
-        highWaterMark: 128 * 1024,
-      };
-
-      const { highWaterMark, silent } = options;
-      let progress = 0;
-      const stream: Readable = await this.getData({ nodeId });
-      const { properties, size } = this.get({ nodeId });
-      const dirPath = path.join(__dirname, "..", "..", "downloads");
-      filePath ||= `${dirPath}/${properties.name}`;
-      const writable = createWriteStream(filePath, { highWaterMark });
-      stream
-          .pipe(writable)
-          .on("end", () => {
-            resolve(filePath);
-          })
-          .on("error", (err) => {
-            reject(err);
-          })
-          .on("data", (d) => {
-            progress += d.length;
-            if (process.stdout.isTTY) {
-              if (!silent) {
-                process.stdout.clearLine(0);
-                process.stdout.cursorTo(0);
-                process.stdout.write(`Downloaded ${progress} bytes`);
-              }
-              this.emit("progress", {
-                donwloaded: progress,
-                totalSize: size,
-                porcentageDownloaded: (progress * 100) / Number(size),
-              });
-            }
-          });
-    });
-  }
-
-  /**
-   * Upload, uploads a file, url, path, stream
-   * @param {Object} params
-   * @returns {Schema$File}
-   */
-  public upload(params): Promise<Schema$File> {
-    return new Promise(async (resolve, reject) => {
-      let {
-        path,
-        stream,
-        properties,
-        name,
-        url,
-        targetId,
-        key,
-        thumbnail,
-        preview,
-        size,
-        options,
-      } = params;
-      // eslint-disable-next-line prefer-promise-reject-errors
-      if (!name && !properties && stream) Promise.reject("Filename is required for upload streams");
-      if (!name && path) name = basename(path);
-      if (!name && url) {
-        name = (await axios.get(url)).headers["content-disposition"].split("filename=")[1];
-      }
-      properties ||= {
-        name,
-      };
-      key ||= randomBytes(24);
-      const encrypter = createEncrypterStream(key, { start: 0 });
-      if (stream) {
-      }
-      const folder = this.get({ nodeId: targetId });
-      const passtrougth = new PassThrough();
-      stream.pipe(encrypter).pipe(passtrougth);
-      const { hash, type } = await this._upload({
-        stream: passtrougth,
-        size,
-        options,
-        type: TYPE_FILE_DATA.indexOf("file"),
-      });
-      finalizeUpload(hash, type);
-
-      // eslint-disable-next-line require-jsdoc
-      async function finalizeUpload(hash, type) {
-        const checkError = Number(hash.toString());
-        if (checkError < 0) reject('Server returned error ' + checkError + ' while uploading');
-        hashes[type] = hash;
-        if (thumbnail && !hashes[TYPE_FILE_DATA.indexOf("thumbnail")]) return;
-        if (preview && !hashes[TYPE_FILE_DATA.indexOf("preview")]) return;
-        if (!hashes[TYPE_FILE_DATA.indexOf("file")]) return;
-        const propertiesPacked = Properties.pack(properties);
-        getCipher(key).encryptCBC(propertiesPacked);
-        const storedKey = Buffer.from(key);
-        const fileObject: any = {
-          h: e64(hashes[0]),
-          t: TYPE_FILE_DATA.indexOf["file"],
-          a: e64(propertiesPacked),
-          k: e64(this.KEY_AES.encryptECB(storedKey)),
-        };
-        if (hashes.length !== 1) fileObject.fa = hashes.slice(1).map((hash, index) => index + '*' + e64(hash)).filter((e) => e).join('/');
-        const request: any = {
-          a: 'p',
-          t: folder.nodeId,
-          n: [fileObject],
-        };
-        const shares = getShares(this.shareKeys, folder);
-        if (shares.length > 0) {
-          request.cr = makeCryptoRequest(this.storage, [{
-            nodeId: fileObject.h,
-            key: key,
-          }], shares);
-        }
-
-        const response = await this.api.request(request);
-        const file = this.compose(response.f[0]);
-        this.emit('add', file);
-        stream.emit('complete', file);
-        resolve(file);
-      }
-    });
-  }
-
-  /**
-   * Helper function upoad thumbnail file or preview
-   * @param param0
-   * @returns
-   */
-  protected _upload({ stream, size, options, type }:
-    { stream: Stream; size: number; options?: any; type?: number
-    }): Promise<{ hash: string; type: string}> {
-    return new Promise(async(resolve, reject) => {
-      const ssl = options.forceHttps ? 2 : 0;
-
-      let { initialChunkSize, chunkSizeIncrement, maxChunkSize, maxConnections } = options;
-
-      initialChunkSize ||= type === 0 ? 128 * 1024 : size;
-      initialChunkSize ||= 128 * 1024;
-      maxChunkSize ||= 1024 * 1024;
-      maxConnections ||= 4;
-
-      let currentChunkSize = initialChunkSize;
-      let activeConnections = 0;
-      let isReading = false;
-      let position = 0;
-      let remainingBuffer;
-      let uploadBuffer; let chunkSize; let chunkPos;
-
-      const urlRequqest: any = type === 0 ?
-        {
-          a: 'u',
-          ssl,
-          s: size,
-          ms: 0,
-          r: 0,
-          e: 0,
-          v: 2,
-        } :
-        {
-          a: 'ufa',
-          ssl,
-          s: size,
-        };
-
-      if (options.handle) urlRequqest.h = options.handle;
-
-      const response = await this.api.request(urlRequqest);
-      const uploadURL = response.p;
-      await handleChunk();
-
-      // eslint-disable-next-line require-jsdoc
-      async function handleChunk() {
-        chunkSize = Math.min(currentChunkSize, size - position);
-        uploadBuffer = Buffer.alloc(chunkSize);
-        activeConnections++;
-        if (currentChunkSize < maxChunkSize) currentChunkSize += chunkSizeIncrement;
-        chunkPos = 0;
-
-        if (remainingBuffer) {
-          remainingBuffer.copy(uploadBuffer);
-          chunkPos = Math.min(remainingBuffer.length, chunkSize);
-          remainingBuffer = remainingBuffer.length > chunkSize ?
-            remainingBuffer.slice(chunkSize) :
-            null;
-        }
-
-        // It happens when the remaining buffer contains the entire chunk
-        if (chunkPos === chunkSize) {
-          sendChunk();
-        } else {
-          isReading = true;
-        }
-      }
-
-      // eslint-disable-next-line require-jsdoc
-      async function sendChunk() {
-        let response;
-        try {
-          response = await this.api.axios({
-            url: uploadURL + '/' + (type === 0 ? position : (type - 1)),
-            method: "POST",
-            data: uploadBuffer,
-          });
-        } catch (error) {
-          reject(error);
-        }
-
-        const { headers, status } = response;
-
-        if (status !== 200) stream.emit('error', Error('MEGA returned a ' + response.statusCode + ' status code'));
-        uploadBuffer = null;
-        position += chunkSize;
-
-        console.log("data", response.data);
-
-        const hash = response.data;
-
-        if (hash.length > 0) {
-          resolve(hash);
-        } else if (position < size && !isReading) {
-          handleChunk();
-        }
-
-        if (position < size && !isReading && activeConnections < maxConnections) {
-          handleChunk();
-        }
-      }
-
-      let sizeCheck = 0;
-      stream.on('data', (data) => {
-        sizeCheck += data.length;
-        stream.emit('progress', {
-          bytesLoaded: sizeCheck,
-          bytesTotal: size,
-        });
-        data.copy(uploadBuffer, chunkPos);
-        chunkPos += data.length;
-        if (chunkPos >= chunkSize) {
-          isReading = false;
-          remainingBuffer = data.slice(data.length - (chunkPos - chunkSize));
-          sendChunk();
-        }
-      });
-
-      stream.on('end', () => {
-        if (size && sizeCheck !== size) stream.emit('error', Error('Specified data size does not match: ' + size + ' !== ' + sizeCheck));
-      });
-    }));
-  }
-
-  protected async _uploadAttributes({ type, data, key, options }) {
-    if (data.pipe === "function") data = await s2b(data);
-    const len = data.length;
-    const rest = Math.ceil(len / 16) * 16 - len;
-
-    if (rest !== 0) {
-      data = Buffer.concat([data, Buffer.alloc(rest)]);
-    }
-
-    const encrypter = opt.handle ?
-      getCipher(key) :
-      new AES(key.slice(0, 16));
-    encrypter.encryptCBC(data);
-
-
-    this._upload({
-      stream: data,
-      size: data.length,
-      type,
-    });
-  }
 
   /**
    * List files by nodeId
@@ -618,11 +354,11 @@ export default class Files extends EventEmitter {
       const node = [{
         h: "xxxxxxxx",
         t: 1,
-        a: e64(getCipher(key).encryptCBC(Properties.pack({
+        a: base64.encrypt(getCipher(key).encrypt.cbc(Properties.pack({
           n: name,
           ...properties,
         }))),
-        k: e64(this.KEY_AES.encryptECB(key)),
+        k: base64.encrypt(this.KEY_AES.encrypt.ecb(key)),
       }];
 
 
@@ -648,7 +384,7 @@ export default class Files extends EventEmitter {
       const dirs = folderPath.split("/");
       if (!parent) parent = this.ID_ROOT_FOLDER;
       for await (const dirname of dirs) {
-        const nodeId = await this.exists(dirname);
+        const { nodeId} = this.get({ name: dirname});
         if (nodeId) {
           parent = nodeId;
           continue;
@@ -696,34 +432,45 @@ export default class Files extends EventEmitter {
       resolve(false);
     });
   }
-  public isDir(nodeId) {
+  public isDir(nodeId: string): boolean {
     const { isDir } = this.data.find((e) => e.nodeId === nodeId);
     return isDir;
   }
-  // OK
-  public delete({ nodeId, permanent }): Promise<void> {
-    return new Promise(async (resolve, reject) => {
+  public uploader(): UploaderInternal {
+    return new UploaderInternal(this.client);
+  }
+  /**
+   * Deletes a file permanently or move to trash bin
+   * @param {Object} params
+   * @returns {Promise}
+   */
+  public async delete({ nodeId, permanent }: { nodeId: string; permanent?: boolean}): Promise<void> {
+    if (permanent) {
       try {
-        if (permanent) {
-          await this.api.request({
-            a: "d",
-            n: nodeId,
-          });
-        } else {
-          await this.move({
-            nodeId,
-            target: this.ID_TRASH,
-          });
-        }
-      } catch (err) {
-        reject(err);
+        await this.api.request({
+          a: "d",
+          n: nodeId,
+        });
+        return Promise.resolve();
+      } catch (error) {
+        return Promise.reject(error);
       }
-
-      resolve();
-    });
+    }
+    try {
+      await this.move({
+        nodeId,
+        target: this.ID_TRASH,
+      });
+      return Promise.resolve();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
   // OK
-  public move({ nodeId, target }): Promise<void> {
+  public move({ nodeId, target }: {
+    nodeId: string;
+    target: string;
+  }): Promise<void> {
     return new Promise(async (resolve, reject) => {
       try {
         await this.api.request({
@@ -760,13 +507,13 @@ export default class Files extends EventEmitter {
         const newProperties = Object.assign(file.properties, properties);
         const unparsed = Properties.unparse(newProperties);
         const packed = Properties.pack(unparsed);
-        getCipher(file.key).encryptCBC(packed);
+        getCipher(file.key).encrypt.cbc(packed);
 
         // making request
         await this.api.request({
           a: "a",
           n: file.nodeId,
-          at: e64(packed),
+          at: base64.encrypt(packed),
         });
 
 
@@ -811,8 +558,8 @@ export default class Files extends EventEmitter {
           {
             h: "xxxxxxxx",
             t: 1,
-            a: e64(getCipher(key).encryptCBC(Properties.pack(properties))),
-            k: e64(this.KEY_AES.encryptECB(key)),
+            a: base64.encrypt(getCipher(key).encrypt.cbc(Properties.pack(properties))),
+            k: base64.encrypt(this.KEY_AES.encrypt.ecb(key)),
           },
         ],
       });
@@ -820,16 +567,19 @@ export default class Files extends EventEmitter {
       resolve();
     });
   }
-  public export({ name, nodeId }) {
-    return new Promise(async (resolve) => {
-      let shareKey: Buffer;
+
+  /**
+   * Exports a file or folder by nodeId
+   * @param {{ name, nodeId }} params
+   * @returns {Promise<string>} url
+   */
+  public async export({ nodeId }: { nodeId: string}): Promise<string> {
+    let shareKey: Buffer;
+    try {
       const file = await this.get({
-        name,
         nodeId,
       });
-      /*    if (isDir) {
-                 this.shareFolder(options, cb)
-               } */
+
       if (file.isDir) {
         shareKey = randomBytes(16);
         this.shareKeys[file.nodeId] = shareKey;
@@ -841,8 +591,8 @@ export default class Files extends EventEmitter {
             u: "EXP",
             r: 0,
           }],
-          ok: e64(this.KEY_AES.encryptECB(Buffer.from(shareKey))),
-          ha: e64(this.KEY_AES.encryptECB(Buffer.from(file.nodeId + file.nodeId))),
+          ok: base64.encrypt(this.KEY_AES.encrypt.ecb(Buffer.from(shareKey))),
+          ha: base64.encrypt(this.KEY_AES.encrypt.ecb(Buffer.from(file.nodeId + file.nodeId))),
           cr,
         };
 
@@ -852,14 +602,17 @@ export default class Files extends EventEmitter {
         a: "l",
         n: file.nodeId,
       });
-      const url = `https://mega.nz/${file.isDir ? "folder" : "file"}/${id}#${e64(shareKey || file.key)}`;
-      resolve(url);
-    });
+
+      const url = `https://mega.nz/${file.isDir ? "folder" : "file"}/${id}#${base64.encrypt(shareKey || file.key)}`;
+      return Promise.resolve(url);
+    } catch (error) {
+      Promise.reject(error);
+    }
   }
-  public unexport({ name, nodeId }) {
-    return new Promise(async (resolve) => {
-    });
-  }
+
+  /*
+
+IN PROGRESSS...
   async import({ nodeId, url }: { nodeId?: string; url: string }) {
     const self = this;
     function prepareRequest(source: Schema$File, ph = false) {
@@ -869,8 +622,8 @@ export default class Files extends EventEmitter {
       const req: any = {
         h: Array.isArray(publicHandle) ? publicHandle[1] : publicHandle,
         t: source.isDir ? 1 : 0,
-        a: e64(cipher.encryptCBC(packedProperties)),
-        k: e64(self.KEY_AES.encryptECB(source.key)),
+        a: base64.encrypt(cipher.encrypt.CBC(packedProperties)),
+        k: base64.encrypt(self.KEY_AES.encrypt.ECB(source.key)),
       };
       ph && (req.h = req.ph);
       return req;
@@ -897,9 +650,9 @@ export default class Files extends EventEmitter {
 
     console.log(request);
     await this.api.request(request);
-  }
-  async loadAttributes({ isDir, downloadId, file, key }): Promise<any> {
-    return new Promise(async (resolve, reject) => {
+  } */
+  async loadAttributes({ isDir, downloadId, key }: GenericObject): Promise<GenericObject> {
+    return new Promise(async (resolve) => {
       const req = isDir ? {
         a: "f",
         c: 1,
@@ -910,7 +663,9 @@ export default class Files extends EventEmitter {
         p: downloadId,
       };
 
-      const response = await this.api.customRequest(req, { n: downloadId });
+      const response = await this.api.custom({data: req,
+        params: { n:
+          downloadId}});
       if (isDir) {
         const nodes = response.f;
         const rootFolder = nodes.find((node) => node.k && node.h === node.k.split(":")[0]);
@@ -958,7 +713,7 @@ function getShares(shareKeys: Files["shareKeys"], node: Schema$File) {
     shares.concat(getShares(shareKeys, parent)) :
     shares;
 }
-function makeCryptoRequest(files, sources, shares?: any) {
+function makeCryptoRequest(files: Files, sources: any, shares?: string[]) {
   const shareKeys = files.shareKeys;
 
   if (!Array.isArray(sources)) {
@@ -990,44 +745,12 @@ function makeCryptoRequest(files, sources, shares?: any) {
       const fileKey = Buffer.from(sources[j].key);
 
       if (fileKey && (fileKey.length === 32 || fileKey.length === 16)) {
-        cryptoRequest[2].push(i, j, e64(aes.encryptECB(fileKey)));
+        cryptoRequest[2].push(i, j, base64.encrypt(aes.encrypt.ecb(fileKey)));
       }
     }
   }
 
   return cryptoRequest;
-}
-
-class Url {
-  static parse(url) {
-    url = parse(url);
-    if (url.path.match(/\/(file|folder)\//) !== null) {
-      // new format
-      const [key, file] = url.hash.substr(1).split("/file/");
-      const downloadId = url.path.substring(
-          url.path.lastIndexOf("/") + 1,
-          url.path.length + 1,
-      );
-
-      const isDir = url.path.indexOf("/folder/") >= 0;
-      console.log(key, "from static url");
-      return {
-        key: d64(key),
-        file,
-        downloadId,
-        isDir,
-      };
-    } else {
-      // old format
-      const [isDir, downloadId, key, file] = url.hash.split("!");
-      return {
-        key,
-        file,
-        downloadId,
-        isDir,
-      };
-    }
-  }
 }
 
 function searchByName(data: Schema$File[], name: string): Schema$File {
@@ -1037,23 +760,3 @@ function searchByName(data: Schema$File[], name: string): Schema$File {
 function searchByNode(data: Schema$File[], nodeId: string): Schema$File {
   return data.find((e) => nodeId === e.nodeId);
 }
-
-
-/* class DarkFiles extends Files {
-  constructor(context) {
-    super(context);
-  }
-
-  /*
-        tags(nodeId: string, tags: string[]){
-            return new Promise(async(resolve)=>{
-
-                let properties = {
-                    tags:
-                }
-                this.update({nodeId, })
-            })
-        } */
-} */
-
-

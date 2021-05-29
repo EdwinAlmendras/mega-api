@@ -5,11 +5,14 @@ export declare class Email {
 export declare class TemporaryEmail extends Email {
     gateway: string;
     mails: Array<any>;
+    static mailbox: string;
+    static email: string;
     constructor({ email, reload }: {
-        email: any;
-        reload: any;
+        email: string;
+        reload?: boolean;
     });
-    fetch(): Promise<any>;
+    static generateRandomMail(): Promise<string>;
+    fetch(): Promise<any[]>;
     get(id: any): Promise<any>;
     new(): Promise<void>;
 }

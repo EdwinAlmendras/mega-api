@@ -1,15 +1,26 @@
 import { AxiosRequestConfig } from "axios";
-import { GenericObject } from "../types";
-export interface Constructor$Api {
-    keepalive?: Boolean;
-    useTor?: Boolean;
+export interface Constructor {
+    keepalive?: boolean;
+    useTor?: boolean;
     SESSION_ID?: string;
 }
 export interface Options$MegaApi {
     keepalive?: boolean;
     useTor?: boolean;
 }
-export interface Schmea$ApiFile {
+export interface QueryStringApi {
+    id: string;
+    sid?: string;
+}
+export interface CustomRequest {
+    data: GenericObject;
+    params: GenericObject;
+    config?: AxiosRequestConfig;
+}
+export declare type GenericObject = {
+    [key: string]: any;
+};
+export interface Schmea$File {
     k?: string;
     h?: string;
     at?: string;
