@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig } from "axios";
+/* import axios, { AxiosRequestConfig } from "axios";
 import { AES, base64, createEncrypterStream, MegaEncrypt } from "../crypto";
 import { Writable, WritableOptions } from "stream";
 import { SSL, Uplaod$Params } from "types";
@@ -132,3 +132,4 @@ export interface Request$UploadFinish {
     t: number;
   }]
 }
+ */

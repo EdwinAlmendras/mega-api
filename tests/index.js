@@ -8,9 +8,9 @@ async function main() {
     fetch: true,
   });
   await client.files.update({
-    name: "workung...",
+    name: "passed",
     properties: {
-      name: "passed",
+      name: "asdasd",
     },
   });
   console.log(client.files);

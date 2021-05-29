@@ -1,17 +1,10 @@
 /// <reference types="node" />
-import { Options as TikTokOptions } from "tiktok-scraper";
-import { UploaderInternal } from "./files.uploader-internal";
 import { GenericObject, Schema$File, Schema$Properties } from "../types";
 import { MegaClient } from "./";
 import { AxiosResponse } from "axios";
 import { Params$GetData } from "../types";
 import EventEmitter from "events";
 import { MegaApiClient } from "./api";
-interface Params$Tiktok {
-    user?: string;
-    hashtag?: string;
-    music?: string;
-}
 /**
  * Class uploader - return instance upload - for upload any into folder
  */
@@ -19,12 +12,6 @@ export declare class Uploader {
     client: MegaApiClient;
     FOLDER_ROOT: string;
     constructor(client: MegaApiClient);
-    /**
-     * tiktok - upload every in mega account easy
-     * @param {Object} param0
-     * @param {Object} options
-     */
-    tiktok({ user, hashtag, music }: Params$Tiktok, options: TikTokOptions): Promise<void>;
 }
 /**
  * Main class files for every purpose file
@@ -117,7 +104,6 @@ export default class Files extends EventEmitter {
     search(text: string): Promise<Schema$File[] | boolean>;
     exists(name: string): Promise<boolean>;
     isDir(nodeId: string): boolean;
-    uploader(): UploaderInternal;
     /**
      * Deletes a file permanently or move to trash bin
      * @param {Object} params
@@ -150,4 +136,3 @@ export default class Files extends EventEmitter {
     }): Promise<string>;
     loadAttributes({ isDir, downloadId, key }: GenericObject): Promise<GenericObject>;
 }
-export {};

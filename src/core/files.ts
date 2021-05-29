@@ -1,9 +1,7 @@
 /* eslint-disable require-jsdoc */
 /* eslint-disable no-async-promise-executor */
-import tiktok, { Options as TikTokOptions } from "tiktok-scraper";
-import { UploaderInternal } from "./files.uploader-internal";
 import { randomBytes } from "crypto";
-import { GenericObject, Schema$File, Schema$Properties,  } from "../types";
+import { GenericObject, Schema$File, Schema$Properties } from "../types";
 import { MegaClient } from "./";
 import Properties from "./properties";
 import { AxiosResponse } from "axios";
@@ -38,7 +36,7 @@ export class Uploader {
    * @param {Object} param0
    * @param {Object} options
    */
-  async tiktok({ user, hashtag, music }: Params$Tiktok, options: TikTokOptions): Promise<void> {
+/*   async tiktok({ user, hashtag, music }: Params$Tiktok, options: TikTokOptions): Promise<void> {
     let response: tiktok.Result;
     if (user) {
       response = await tiktok.user(user, options);
@@ -50,8 +48,8 @@ export class Uploader {
     console.log(response);
     /*  for await (const {} of response.collector) {
 
-    } */
-  }
+    }
+  } */
 }
 
 
@@ -435,9 +433,6 @@ t: "3WIFyQ7R" */
   public isDir(nodeId: string): boolean {
     const { isDir } = this.data.find((e) => e.nodeId === nodeId);
     return isDir;
-  }
-  public uploader(): UploaderInternal {
-    return new UploaderInternal(this.client);
   }
   /**
    * Deletes a file permanently or move to trash bin
