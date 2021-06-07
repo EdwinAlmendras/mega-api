@@ -85,7 +85,7 @@ export class Account extends EventEmitter {
       user: email,
     });
     const version = response.v;
-    const salt = response.salt;
+    const salt = response.s;
 
     const passwordBytes = Buffer.from(password, "utf8");
     // V1 ACCOUNT HADLE LOGIN

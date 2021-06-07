@@ -29,8 +29,9 @@ export interface Schema$File {
   type?: number;
   owner?: string;
   isDir?: boolean;
+  thumbs?: string;
   size?: number | string;
-  parent?: any;
+  parent?: string;
   downloadId?: string;
   shareKey?: string;
   key?: Buffer;
@@ -65,17 +66,11 @@ export interface Schema$Properties {
   };
 }
 export interface Options$LoadMetadata {
-  /* Attributes */
   a: string; // Base64 encrypted attributes
-  /* Size of file */
   s: number;
-  /* Timestamp (created at) */
   ts: number;
-  /* Type of file */
   t: string;
-  /* Owner : user thats created */
   u: string;
-  /* Key */
   k: string; // Base64 encryptrd key thats encrypted file
 }
 

@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { GenericObject, Schema$File, Schema$Properties } from "../types";
 import { MegaClient } from "./";
 import Properties from "./properties";
-import { AxiosResponse } from "axios";
+import axios, { AxiosResponse } from "axios";
 import { PassThrough } from "stream";
 import { v4 } from "uuid";
 import { uniq } from "lodash";
@@ -13,11 +13,15 @@ import EventEmitter from "events";
 // import {pipeline} from "stream";
 import { MegaApiClient } from "./api";
 const KEY_CACHE = {};
-import { base64,
+import {
+  base64,
   AES,
   getCipher,
   createDecrypterStream,
-  constantTimeCompare } from "../crypto";
+  constantTimeCompare,
+} from "../crypto";
+import { Stream } from "node:stream";
+import { writeFileSync } from "fs";
 // const TYPE_FILE_DATA = ["file", "thumbnail", "preview"];
 
 
@@ -36,20 +40,20 @@ export class Uploader {
    * @param {Object} param0
    * @param {Object} options
    */
-/*   async tiktok({ user, hashtag, music }: Params$Tiktok, options: TikTokOptions): Promise<void> {
-    let response: tiktok.Result;
-    if (user) {
-      response = await tiktok.user(user, options);
-    } else if (hashtag) {
-      response = await tiktok.hashtag(user, options);
-    } else if (music) {
-      response = await tiktok.user(user, options);
-    }
-    console.log(response);
-    /*  for await (const {} of response.collector) {
+  /*   async tiktok({ user, hashtag, music }: Params$Tiktok, options: TikTokOptions): Promise<void> {
+      let response: tiktok.Result;
+      if (user) {
+        response = await tiktok.user(user, options);
+      } else if (hashtag) {
+        response = await tiktok.hashtag(user, options);
+      } else if (music) {
+        response = await tiktok.user(user, options);
+      }
+      console.log(response);
+      /*  for await (const {} of response.collector) {
 
-    }
-  } */
+      }
+    } */
 }
 
 
@@ -64,7 +68,7 @@ export default class Files extends EventEmitter {
   public data: Schema$File[];
   private KEY_AES: AES
   private api: MegaApiClient;
-  constructor(private client: MegaClient) {
+  constructor(protected client: MegaClient) {
     super();
     this.KEY_AES = this.client.state.KEY_AES;
     this.api = this.client.api;
@@ -112,7 +116,7 @@ export default class Files extends EventEmitter {
    * @param {Object} f
    * @returns {void}
    */
-  public compose(f) {
+  public compose(f): Schema$File {
     if (!this.data.find((e) => e.nodeId === f.h)) {
       const file = this.parse(f);
       switch (f.t) {
@@ -152,6 +156,14 @@ export default class Files extends EventEmitter {
       isDir: !!f.t,
       parent: f.p,
     };
+
+    // Adding thumbnails links '835:1*1Kp8_ha2_fU/835:0*dxCWLWRUSXI"
+    if (f.fa) metadata.thumbs = f.fa;
+    /* {
+      const thumb = f.fa.split("/")[0].split("*")[1];
+      const preview = f.fa.split("/")[1].split("*")[1];
+      metadata.thumbs = [thumb, preview];
+    } */
 
     /* IF FILE HAS KEY */
     if (f.k) {
@@ -227,46 +239,12 @@ export default class Files extends EventEmitter {
         searchByName(this.data.filter((e) => e.parent === parent), name) :
         searchByName(this.data, name);
   }
-  /*
-  https://gfs270n075.userstorage.mega.co.nz/dl/Yp-H9qmmVgPHKwJe6p0SCR-05g-YZsIaltDB-nITbFlGrYj3dQtMXAIpPgRDdPcHkz6w6TW_caJZJN-P31WLUpkU0a0KLEIisUUVV_o9SsGjjDLdXfLYaQ/0-121832
-
-  https://gfs270n080.userstorage.mega.co.nz/ul/bLGqPVtfD48PhAJVJ79WubAfmXrJ58NPulkYWUyTV3uT_NZV8P1bYtEy6dXlaagrt0l7FJm4NtTmfwYwQqvF8A/0?c=YMHzpw_K4YHxQ826
-  first uplaod
-
-thumbnail preview
-  [{"a":"ufa","s":6416,"ssl":1},{"a":"ufa","s":53504,"ssl":1},{"a":"ping"}]
-
-
-  0: {,…}
-p: "https://gfs270n861.userstorage.mega.co.nz/OgS-QwtYiVKHngfB2B6RuopFq2pP8W9Sc_cA68yLpzGSpSvnW7kenkhW25P4oBaex73B6g"
-1: {,…}
-p: "https://gfs270n896.userstorage.mega.co.nz/6OICka10omb1LQfT6IDpJ9m2fV4lNW8mI5QX3VIxS5lvMgYzsvycmVn07Me8jsSZzGzkdA"
-2: -2
-
-  POST THE RECEIVE THE URLS FOR UPLOAD THUMB AND PREV
-  https://gfs270n861.userstorage.mega.co.nz/OgS-QwtYiVKHngfB2B6RuopFq2pP8W9Sc_cA68yLpzGSpSvnW7kenkhW25P4oBaex73B6g ADD 0
-  https://gfs270n861.userstorage.mega.co.nz/OgS-QwtYiVKHngfB2B6RuopFq2pP8W9Sc_cA68yLpzGSpSvnW7kenkhW25P4oBaex73B6g/0
-
-  ADD 1 https://gfs270n896.userstorage.mega.co.nz/6OICka10omb1LQfT6IDpJ9m2fV4lNW8mI5QX3VIxS5lvMgYzsvycmVn07Me8jsSZzGzkdA/1
-
-
-  0: {a: "p", t: "3WIFyQ7R", n: [{t: 0, h: "DFpjFKYf1I4MJUoETsyflihopVBhzh03WGHgesFbrSNjb0wB",…}],…}
-a: "p"
-i: "bOw2uhtJjh"
-n: [{t: 0, h: "DFpjFKYf1I4MJUoETsyflihopVBhzh03WGHgesFbrSNjb0wB",…}]
-0: {t: 0, h: "DFpjFKYf1I4MJUoETsyflihopVBhzh03WGHgesFbrSNjb0wB",…}
-a: "KMwLcFzyeiLkrTYPUMQi0N7G2igGr2vljN6cWZIEL9OOi7nd7MwRwxh-E8Dbkq7sLR_QAKlmuNaqVkvvy13Ai-4XWAIkbErKVy0u14BpcE0"
-fa: false
-h: "DFpjFKYf1I4MJUoETsyflihopVBhzh03WGHgesFbrSNjb0wB"
-k: "5EThrZvP5HhAKZBRCPrDhsah7pDwWOeWX31vxTrwd5M"
-t: 0
-t: "3WIFyQ7R" */
   /**
    * Gets data from file, customizable with responseType oprion
    * @param {Object}
    * @returns {AxiosResponse["data"]}
    */
-  public getData({
+  public geData({
     nodeId,
     options,
     responseType,
@@ -307,6 +285,67 @@ t: "3WIFyQ7R" */
       }
     });
   }
+  /*   private getDownloadData {
+
+  } */
+  /**
+   * Get the thumbnail buffer
+   * @param {nodeId} node Id handle file
+   * @returns {Promise}
+  */
+  public async thumbnail({ nodeId }): Promise<any> {
+    const file = this.get({ nodeId });
+
+    const res = await this.api.request({
+      a: "ufa",
+      fah: file.thumbs.split("/")[0].split("*")[1],
+      r: 1,
+      ssl: 0,
+    });
+
+    let data;
+    let i; let t;
+    let p; const pp = [res.p];
+    let m;
+
+    // eslint-disable-next-line no-cond-assign
+    for (i = 0; p = res['p' + i]; i++) {
+      pp.push(p);
+    }
+
+    for (m = pp.length; m--;) {
+      const dp = 8 * Math.floor(m / pp.length * file.thumbs.length / 8);
+      const dl = 8 * Math.floor((m + 1) / pp.length * file.thumbs.length / 8) - dp;
+      console.log(dp, dl);
+      if (dl) {
+        data = new Uint8Array(dl);
+        for (i = dl; i--;) {
+          data[i] = file.thumbs.charCodeAt(dp + i);
+        }
+        data = data.buffer;
+      } else {
+        data = false;
+      }
+      if (data) {
+        t = -1;
+        const URL= res.p += '/0';
+        if (t < 0) {
+          t = URL.length - 1;
+        }
+        try {
+          const res = await axios.post(URL.substr(0, t + 1), Buffer.from(data));
+          console.log(res);
+        } catch (error) {
+          console.log(error);
+        }
+      }
+    }
+  }
+  /*     console.log(resp);
+    console.log("decryoting...");
+    const thumbnail = new AES(file.key).decrypt.cbc(resp.data);
+    writeFileSync("works.jpg", thumbnail);
+    return Promise.resolve(thumbnail); */
 
 
   /**
@@ -327,6 +366,19 @@ t: "3WIFyQ7R" */
       }
     }
     return this.data.filter(filterReducer);
+  }
+
+  public getByPath({ path }: { path: string}): Promise<Schema$File> {
+    // PATH LIKE personal/2019/fabruary
+    const routes = path.split("/");
+    let currentFile;
+    routes.forEach((route)=>{
+      currentFile = this.list({
+        folderId: currentFile?.nodeId || this.client.state.ID_ROOT_FOLDER})
+          .find((e) => e.properties.name === route);
+    });
+    if (!currentFile) Promise.reject(new Error("DONT MATCH THIS MATH"));
+    return Promise.resolve(currentFile);
   }
   /**
    * Creates new directorie in mount
@@ -356,7 +408,7 @@ t: "3WIFyQ7R" */
           n: name,
           ...properties,
         }))),
-        k: base64.encrypt(this.KEY_AES.encrypt.ecb(key)),
+        k: base64.encrypt(this.client.state.KEY_AES.encrypt.ecb(key)),
       }];
 
 
@@ -377,14 +429,14 @@ t: "3WIFyQ7R" */
    * @param {Object}
    * @returns {void}
    */
-  public rdir({ folderPath, parent }: { folderPath?: string; parent?: string }): Promise<void> {
+  public rdir({ path, parent }: { path?: string; parent?: string }): Promise<void> {
     return new Promise(async (resolve) => {
-      const dirs = folderPath.split("/");
+      const dirs = path.split("/");
       if (!parent) parent = this.ID_ROOT_FOLDER;
       for await (const dirname of dirs) {
-        const { nodeId} = this.get({ name: dirname});
-        if (nodeId) {
-          parent = nodeId;
+        const handler = this.get({ name: dirname });
+        if (handler) {
+          parent = handler.nodeId;
           continue;
         }
         const folder = await this.dir({
@@ -439,7 +491,7 @@ t: "3WIFyQ7R" */
    * @param {Object} params
    * @returns {Promise}
    */
-  public async delete({ nodeId, permanent }: { nodeId: string; permanent?: boolean}): Promise<void> {
+  public async delete({ nodeId, permanent }: { nodeId: string; permanent?: boolean }): Promise<void> {
     if (permanent) {
       try {
         await this.api.request({
@@ -568,7 +620,7 @@ t: "3WIFyQ7R" */
    * @param {{ name, nodeId }} params
    * @returns {Promise<string>} url
    */
-  public async export({ nodeId }: { nodeId: string}): Promise<string> {
+  public async export({ nodeId }: { nodeId: string }): Promise<string> {
     let shareKey: Buffer;
     try {
       const file = await this.get({
@@ -605,47 +657,6 @@ t: "3WIFyQ7R" */
     }
   }
 
-  /*
-
-IN PROGRESSS...
-  async import({ nodeId, url }: { nodeId?: string; url: string }) {
-    const self = this;
-    function prepareRequest(source: Schema$File, ph = false) {
-      const cipher = getCipher(source.key);
-      const packedProperties = Properties.pack(source.properties);
-      const publicHandle = source.downloadId;
-      const req: any = {
-        h: Array.isArray(publicHandle) ? publicHandle[1] : publicHandle,
-        t: source.isDir ? 1 : 0,
-        a: base64.encrypt(cipher.encrypt.CBC(packedProperties)),
-        k: base64.encrypt(self.KEY_AES.encrypt.ECB(source.key)),
-      };
-      ph && (req.h = req.ph);
-      return req;
-    }
-    const urlData = Url.parse(url);
-    const source = await this.loadAttributes(urlData);
-    console.log(urlData);
-    const request: any = urlData.isDir ? {
-      a: "p",
-      t: nodeId || this.ID_ROOT_FOLDER,
-      n: source.map((file: Schema$File) => prepareRequest(file)),
-      sm: 1,
-      v: 3,
-    } : {
-      a: "p",
-      t: nodeId || this.ID_ROOT_FOLDER,
-      n: prepareRequest(source, true),
-    };
-
-    if (this.shareKeys && this.shareKeys.length) {
-      request.cr = makeCryptoRequest(this, source[0]);
-    }
-
-
-    console.log(request);
-    await this.api.request(request);
-  } */
   async loadAttributes({ isDir, downloadId, key }: GenericObject): Promise<GenericObject> {
     return new Promise(async (resolve) => {
       const req = isDir ? {
@@ -658,9 +669,13 @@ IN PROGRESSS...
         p: downloadId,
       };
 
-      const response = await this.api.custom({data: req,
-        params: { n:
-          downloadId}});
+      const response = await this.api.custom({
+        data: req,
+        params: {
+          n:
+            downloadId,
+        },
+      });
       if (isDir) {
         const nodes = response.f;
         const rootFolder = nodes.find((node) => node.k && node.h === node.k.split(":")[0]);
@@ -705,7 +720,7 @@ function getShares(shareKeys: Files["shareKeys"], node: Schema$File) {
   }
 
   return parent ?
-    shares.concat(getShares(shareKeys, parent)) :
+    shares.concat(getShares(shareKeys, parent as any)) :
     shares;
 }
 function makeCryptoRequest(files: Files, sources: any, shares?: string[]) {
