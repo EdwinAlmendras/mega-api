@@ -95,11 +95,10 @@ export default class Files extends EventEmitter {
 
       this.shareKeys = ok.reduce((shares, share) => {
         const handler = share.h;
-        const auth = this.KEY_AES.encrypt.ecb(Buffer.from(handler + handler, "utf8"));
-        console.log(share, auth, handler);
-
+        const auth = this.client.state.KEY_AES.encrypt.ecb(Buffer.from(handler + handler, "utf8"));
+       // console.log(share, auth, handler);
         if (constantTimeCompare(base64.decrypt(share.ha), auth)) {
-          shares[handler] = this.KEY_AES.decrypt.ecb(base64.decrypt(share.k));
+          shares[handler] = this.client.state.KEY_AES.decrypt.ecb(base64.decrypt(share.k));
         }
         return shares;
       }, {});

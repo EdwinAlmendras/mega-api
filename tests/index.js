@@ -2,19 +2,17 @@
 
 const { MegaClient } = require("../lib");
 async function main() {
-  const client = new MegaClient();
-  await client.account.login({
-    email: "eafeik7@gmail.com",
-    password: "zxcvbnm",
-    fetch: true,
-  });
-  await client.files.update({
-    name: "passed",
-    properties: {
-      name: "asdasd",
-    },
-  });
-  console.log(client.files);
+  try {
+    const client = new MegaClient();
+    await client.account.login({
+      email: "goldenpark1@yopmail.com",
+      password: "goldenpark1@yopmail.com",
+      fetch: true,
+    });
+    console.log(client.files);
+  } catch (error) {
+    console.log(error)
+  }
 }
 
 main();
