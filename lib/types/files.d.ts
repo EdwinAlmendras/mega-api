@@ -29,8 +29,9 @@ export interface Schema$File {
     type?: number;
     owner?: string;
     isDir?: boolean;
+    thumbs?: string;
     size?: number | string;
-    parent?: any;
+    parent?: string;
     downloadId?: string;
     shareKey?: string;
     key?: Buffer;

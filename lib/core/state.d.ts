@@ -21,4 +21,9 @@ export declare class State {
     ID_ROOT_FOLDER: string;
     ID_TRASH: string;
     ID_FOLDER_INBOX: string;
+    APP_NAME: string;
+    VERSION: string;
+    ID_FOLDER_GIRLS: any;
+    FOLDERS: any;
+    APP: string;
 }

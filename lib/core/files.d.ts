@@ -17,7 +17,7 @@ export declare class Uploader {
  * Main class files for every purpose file
  */
 export default class Files extends EventEmitter {
-    private client;
+    protected client: MegaClient;
     ID_ROOT_FOLDER: string;
     ID_TRASH: string;
     ID_INBOX: string;
@@ -70,7 +70,15 @@ export default class Files extends EventEmitter {
      * @param {Object}
      * @returns {AxiosResponse["data"]}
      */
-    getData({ nodeId, options, responseType, }: Params$GetData): Promise<AxiosResponse["data"]>;
+    geData({ nodeId, options, responseType, }: Params$GetData): Promise<AxiosResponse["data"]>;
+    /**
+     * Get the thumbnail buffer
+     * @param {nodeId} node Id handle file
+     * @returns {Promise}
+    */
+    thumbnail({ nodeId }: {
+        nodeId: any;
+    }): Promise<any>;
     /**
      * List files by nodeId
      * @param {Object}
@@ -80,6 +88,9 @@ export default class Files extends EventEmitter {
         folderId?: string;
         onlyFolders?: boolean;
     }): Schema$File[];
+    getByPath({ path }: {
+        path: string;
+    }): Promise<Schema$File>;
     /**
      * Creates new directorie in mount
      * @param {Object} options
@@ -97,8 +108,8 @@ export default class Files extends EventEmitter {
      * @param {Object}
      * @returns {void}
      */
-    rdir({ folderPath, parent }: {
-        folderPath?: string;
+    rdir({ path, parent }: {
+        path?: string;
         parent?: string;
     }): Promise<void>;
     search(text: string): Promise<Schema$File[] | boolean>;
