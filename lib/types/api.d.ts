@@ -14,7 +14,7 @@ export interface QueryStringApi {
 }
 export interface CustomRequest {
     data: GenericObject;
-    params: GenericObject;
+    params?: GenericObject;
     config?: AxiosRequestConfig;
 }
 export declare type GenericObject = {

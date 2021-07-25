@@ -76,9 +76,15 @@ export default class Files extends EventEmitter {
      * @param {nodeId} node Id handle file
      * @returns {Promise}
     */
-    thumbnail({ nodeId }: {
-        nodeId: any;
-    }): Promise<any>;
+    getThumbnail({ nodeId }: {
+        nodeId: string;
+    }): Promise<Buffer>;
+    /**
+     *
+     * @param param0
+     * @returns
+     */
+    getThumbnails(nodes: string[]): Promise<any[]>;
     /**
      * List files by nodeId
      * @param {Object}
