@@ -10,7 +10,7 @@ export interface Options$MegaApi {keepalive?: boolean; useTor?: boolean}
 export interface QueryStringApi { id: string; sid?: string }
 export interface CustomRequest {
   data: GenericObject;
-  params: GenericObject;
+  params?: GenericObject;
   config?: AxiosRequestConfig
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

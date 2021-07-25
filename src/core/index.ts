@@ -7,6 +7,8 @@ import { Contacts } from "./contacts";
 /**
  * Main function handler
  */
+
+export { default as Files} from "./files"
 export class MegaClient {
   public state = new State()
   public api = new MegaApiClient(this)

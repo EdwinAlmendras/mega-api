@@ -39,14 +39,14 @@ export class MegaApiClient extends EventEmitter {
   async custom({data, params, config}: API.CustomRequest): Promise<API.GenericObject> {
     const qs: ParsedUrlQueryInput = { id: (this.counterId++).toString(),
       ...params };
-    qs.sid ||= this.sid;
+    qs.sid ||= this.client.state.SESSION_ID;
     try {
       const response = await axios({
         url: `${this.client.state.constants.API_GATEWAY_URL}cs?${stringify(qs)}`,
-        data: [data],
+        data,
         ...config,
       });
-      return Promise.resolve(response.data[0]);
+      return Promise.resolve(response.data);
     } catch (error) {
       Promise.reject(error);
     }

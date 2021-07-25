@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 /* eslint-disable require-jsdoc */
 /* eslint-disable no-async-promise-executor */
 import { randomBytes } from "crypto";
@@ -20,7 +21,8 @@ import {
   createDecrypterStream,
   constantTimeCompare,
 } from "../crypto";
-import { Stream } from "node:stream";
+import fetch from "node-fetch";
+import { URL } from "url";
 import { writeFileSync } from "fs";
 // const TYPE_FILE_DATA = ["file", "thumbnail", "preview"];
 
@@ -96,7 +98,7 @@ export default class Files extends EventEmitter {
       this.shareKeys = ok.reduce((shares, share) => {
         const handler = share.h;
         const auth = this.client.state.KEY_AES.encrypt.ecb(Buffer.from(handler + handler, "utf8"));
-       // console.log(share, auth, handler);
+        // console.log(share, auth, handler);
         if (constantTimeCompare(base64.decrypt(share.ha), auth)) {
           shares[handler] = this.client.state.KEY_AES.decrypt.ecb(base64.decrypt(share.k));
         }
@@ -292,60 +294,123 @@ export default class Files extends EventEmitter {
    * @param {nodeId} node Id handle file
    * @returns {Promise}
   */
-  public async thumbnail({ nodeId }): Promise<any> {
+  public async getThumbnail({ nodeId }: { nodeId: string }): Promise<Buffer> {
     const file = this.get({ nodeId });
-
-    const res = await this.api.request({
+    const thumbId2 = file.thumbs.split("/")[1].split("*")[1];
+    const { p: thumbUrl } = await this.api.request({
       a: "ufa",
-      fah: file.thumbs.split("/")[0].split("*")[1],
+      fah: thumbId2,
       r: 1,
-      ssl: 0,
+      ssl: 1,
     });
-
-    let data;
-    let i; let t;
-    let p; const pp = [res.p];
-    let m;
-
-    // eslint-disable-next-line no-cond-assign
-    for (i = 0; p = res['p' + i]; i++) {
-      pp.push(p);
-    }
-
-    for (m = pp.length; m--;) {
-      const dp = 8 * Math.floor(m / pp.length * file.thumbs.length / 8);
-      const dl = 8 * Math.floor((m + 1) / pp.length * file.thumbs.length / 8) - dp;
-      console.log(dp, dl);
-      if (dl) {
-        data = new Uint8Array(dl);
-        for (i = dl; i--;) {
-          data[i] = file.thumbs.charCodeAt(dp + i);
-        }
-        data = data.buffer;
-      } else {
-        data = false;
-      }
-      if (data) {
-        t = -1;
-        const URL= res.p += '/0';
-        if (t < 0) {
-          t = URL.length - 1;
-        }
-        try {
-          const res = await axios.post(URL.substr(0, t + 1), Buffer.from(data));
-          console.log(res);
-        } catch (error) {
-          console.log(error);
-        }
-      }
+    const hash = base64.decrypt(thumbId2);
+    const url = thumbUrl + "/0";
+    const headers = {
+      "Origin": "https://mega.nz",
+      "User-Agent": "Mozilla/ 5.0(Linux; Android 10; SM - M115F) AppleWebKit / 537.36(KHTML, like Gecko) Chrome / 88.0.4324.152 Mobile Safari / 537.36",
+      "Accept": "*/*",
+      "Referer": "https://mega.nz/",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Accept-Language": "es-ES,es;q=0.9",
+      "Connection": "keep-alive",
+      "Content-Length": "8",
+      "sec-ch-ua": `" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"`,
+      "sec-ch-ua-mobile": "?0",
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Site": "cross-site",
+      "Content-Type": "application/octet-stream",
+    };
+    try {
+      const { data } = await axios({
+        url,
+        method: "POST",
+        data: hash,
+        responseType: "arraybuffer",
+        headers,
+      });
+      const aes = getCipher(file.key);
+      const thumb = aes.decrypt.cbc(data.slice(12, data.length));
+      return Promise.resolve(thumb);
+    } catch (error) {
+      return Promise.reject(error);
     }
   }
-  /*     console.log(resp);
-    console.log("decryoting...");
-    const thumbnail = new AES(file.key).decrypt.cbc(resp.data);
-    writeFileSync("works.jpg", thumbnail);
-    return Promise.resolve(thumbnail); */
 
+  /**
+   *
+   * @param param0
+   * @returns
+   */
+
+  public async getThumbnails(nodes: string[]): Promise<any[]> {
+    const files: any[] = nodes.map((e) => {
+      const file = this.get({ nodeId: e });
+      const thumbId = file.thumbs.split("/")[1].split("*")[1];
+      const hash = base64.decrypt(thumbId);
+
+      return {
+        ...file,
+        thumbId,
+        hash,
+      };
+    });
+
+
+    const request = files.map((e) => {
+      return ({
+        a: "ufa",
+        fah: e.thumbId,
+        r: 1,
+        ssl: 1,
+      });
+    });
+
+    console.log(request)
+    const data= await this.api.custom({
+      data: request,
+      config: {
+        method: "POST",
+      },
+    });
+
+    console.log(data)
+
+    for await (const [index, {p}] of data.entries()) {
+      console.log(index)
+      const url = p + "/0";
+      console.log(url)
+      const headers = {
+        "Origin": "https://mega.nz",
+        "User-Agent": "Mozilla/ 5.0(Linux; Android 10; SM - M115F) AppleWebKit / 537.36(KHTML, like Gecko) Chrome / 88.0.4324.152 Mobile Safari / 537.36",
+        "Accept": "*/*",
+        "Referer": "https://mega.nz/",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "es-ES,es;q=0.9",
+        "Connection": "keep-alive",
+        "Content-Length": "8",
+        "sec-ch-ua": `" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"`,
+        "sec-ch-ua-mobile": "?0",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "cross-site",
+        "Content-Type": "application/octet-stream",
+      };
+
+      const { data } = await axios({
+        url,
+        method: "POST",
+        data: files[index].hash,
+        responseType: "arraybuffer",
+        headers,
+      });
+      const aes = getCipher(files[index].key);
+      const thumbBuffer = aes.decrypt.cbc(data.slice(12, data.length));
+      files[index].thumbBuffer = thumbBuffer;
+    }
+
+    return Promise.resolve(files);
+  }
 
   /**
    * List files by nodeId
@@ -367,13 +432,14 @@ export default class Files extends EventEmitter {
     return this.data.filter(filterReducer);
   }
 
-  public getByPath({ path }: { path: string}): Promise<Schema$File> {
+  public getByPath({ path }: { path: string }): Promise<Schema$File> {
     // PATH LIKE personal/2019/fabruary
     const routes = path.split("/");
     let currentFile;
-    routes.forEach((route)=>{
+    routes.forEach((route) => {
       currentFile = this.list({
-        folderId: currentFile?.nodeId || this.client.state.ID_ROOT_FOLDER})
+        folderId: currentFile?.nodeId || this.client.state.ID_ROOT_FOLDER,
+      })
           .find((e) => e.properties.name === route);
     });
     if (!currentFile) Promise.reject(new Error("DONT MATCH THIS MATH"));
@@ -769,3 +835,7 @@ function searchByName(data: Schema$File[], name: string): Schema$File {
 function searchByNode(data: Schema$File[], nodeId: string): Schema$File {
   return data.find((e) => nodeId === e.nodeId);
 }
+function config(thumbUrl: any, hash: Buffer, config: any, arg3: { headers: { "Content-Type": string; Origin: string; "User-Agent": string; Accept: string; Referer: string; "Accept-Encoding": string; "Accept-Language": string; }; }) {
+  throw new Error("Function not implemented.");
+}
+

@@ -19,6 +19,7 @@
     "lodash": "^4.17.21",
     "mime-types": "^2.1.29",
     "moment": "^2.29.1",
+    "node-fetch": "^2.6.1",
     "pastebin-js": "^1.0.6",
     "promise-fs": "^2.1.1",
     "pump": "^3.0.0",
