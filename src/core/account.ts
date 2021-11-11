@@ -6,43 +6,13 @@ import { Schema$SorageInfo } from "../types";
 import { parse } from "url";
 import { TemporaryEmail } from "../utils/email";
 import cheerio from "cheerio";
-
 import { randomBytes } from "crypto";
 import { MegaClient } from ".";
 import { generateRandomUser } from "../utils/random";
-/*
-NOT IMPLEMENTDE YET
-  async export() {
-     let files = this.files.list(this.);
-     let folder = await this.files.create({
-       name: "ULTRAMK",
-       parent: this.cloudDrive,
-       folder: true,
-     });
-     for await (let file of files) {
-       await this.files.move(file.nodeId, folder);
-     }
-     let link = await this.files.link(folder);
-     return link
-   }
+import * as Account from "../types/account";
+import * as API from "../types/api";
 
-   async copy(user: User) {
-     let link = await this.files.export({nodeId: this.cloudDrive});
-     await user.files.import(link, user.cloudDrive);
-   }
-
-   async backup() {
-     let link = await this.export(this.cloudDrive);
-     let user = await register();
-     let { email, password } = user;
-     await user.files.import(link);
-     await saveCredentials({ email, password, title: "backup generic" });
-   }
-
-
-*/
-
-export class Account extends EventEmitter {
+export default class MegaAccount extends EventEmitter {
   SESSION_ID: string;
   change: {
     email: typeof changeEmail,
@@ -51,58 +21,49 @@ export class Account extends EventEmitter {
   constructor(private client: MegaClient) {
     super();
   }
-  public async login({ email, password, fetch }: { email: string; password: string; fetch?: boolean }): Promise<void> {
-    let aes: AES;
-    let userHash: string;
-    const finishLogin = async (userHash, aes: AES) => {
-      const params = {
-        a: "us",
-        user: email,
-        uh: userHash,
-      };
-      // Geenrating session-id, master-key, rsa-private-key
-      const { k, privk, csid }: { k: string; privk: string; csid: string } = await this.client.api.request(params);
-      const MASTER_KEY = aes.decrypt.ecb(base64.decrypt(k));
-      const KEY_AES = new AES(MASTER_KEY);
-      const t = base64.decrypt(csid);
-      const privKey = KEY_AES.decrypt.ecb(base64.decrypt(privk));
-      // eslint-disable-next-line new-cap
-      this.client.state.RSA_PRIVATE_KEY = cryptoDecodePrivKey(privKey);
-      this.client.state.SESSION_ID = base64.encrypt(cryptoRsaDecrypt(t, this.client.state.RSA_PRIVATE_KEY).slice(0, 43));
-      this.client.state.KEY_AES = KEY_AES;
-      this.client.state.MASTER_KEY = MASTER_KEY;
-      try {
-        await this.data();
-        if (fetch) {
-          await this.client.files.fetch();
-        }
-      } catch (error) {
-        Promise.reject(new Error(error));
-      }
-    };
-    const response = await this.client.api.request({
-      a: "us0",
-      user: email,
-    });
-    const version = response.v;
-    const salt = response.s;
-
+  public async login({ email, password, fetch }: Account.Params$Login): Promise<boolean> {
+    const RSA_PRIVK_LENGTH = 43
     const passwordBytes = Buffer.from(password, "utf8");
-    // V1 ACCOUNT HADLE LOGIN
+    const [passwordKey, userHash] = this._loginGetHashAndPasswordKey(passwordBytes, email)
+    let aes = new AES(passwordKey);
+
+    const params = {
+      a: "us",
+      user: email,
+      uh: base64.encrypt(userHash),
+    };
+
+    const { k, privk, csid }: API.Response$GetLogin = await this.client.api.request(params, { transform: "buffer" });
+
+    const MASTER_KEY = aes.decrypt.ecb(k);
+    const KEY_AES = this.client.state.MASTER_KEY = new AES(MASTER_KEY);
+    const RSA_PRIVK = this.client.state.RSA_PRIVATE_KEY = cryptoDecodePrivKey(KEY_AES.decrypt.ecb(privk));
+    const bufferSessionId = cryptoRsaDecrypt(csid, RSA_PRIVK).slice(0, RSA_PRIVK_LENGTH)
+
+    this.client.state.SESSION_ID = base64.encrypt(bufferSessionId);
+    this.client.state.KEY_AES = KEY_AES;
+
+    try {
+      await this.data();
+      if (fetch) await this.client.files.fetch(); return Promise.resolve(true)
+    } catch (error) {
+      Promise.reject(new Error(error));
+    }
+
+  }
+  private async _loginGetHashAndPasswordKey(pwB, email): Buffer[] {
+    const { v: version, s: salt } = await this.client.api.request({ a: "us0", user: email });
     if (version === 1) {
-      const [passwordKey, uh] = key.prepare.v1(passwordBytes, email);
-      aes = new AES(passwordKey);
-      userHash = base64.encrypt(uh);
-      await finishLogin(userHash, aes);
+      let credentials = key.prepare.v1(passwordBytes, email)
+      return Promise.resolve(credentials)
     } else if (version === 2) {
-      const [passwordKey, uh] = key.prepare.v2(passwordBytes, salt);
-      aes = new AES(passwordKey);
-      userHash = base64.encrypt(uh);
-      await finishLogin(userHash, aes);
+      let credentials = key.prepare.v2(passwordBytes, email)
+      return Promise.resolve(credentials)
+    } else {
+      return Promise.reject("VERSION_ACCOUNT_DONT_SUPPORTED")
     }
   }
 
-  // todo not implemented yet
   public async register(user?: any): Promise<void> {
     try {
       user = !user && await generateRandomUser();
@@ -147,7 +108,7 @@ export class Account extends EventEmitter {
         a: "up",
         k: base64.encrypt(aes.encrypt.ecb(masterKey)),
         ts: base64.encrypt(
-            Buffer.concat([ssc, new AES(masterKey).encrypt.ecb(ssc)]),
+          Buffer.concat([ssc, new AES(masterKey).encrypt.ecb(ssc)]),
         ),
       });
 
