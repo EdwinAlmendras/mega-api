@@ -1,14 +1,9 @@
-
 export * from "./core"
 
 
-/* async function main() {
-    const user: User = await login({
-        email, password
-    }, null)
 
-
-    const files = await user.getFiles()
-    await files.fetch()
-    await files.shortcut({ name: "csac"}, { props: { name: "sacaa"}})
-main() */
+// let newObj = Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, v * v]));
+export function objMap(obj, func) {
+    return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, func(v)]));
+  }
+  

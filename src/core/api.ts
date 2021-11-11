@@ -7,6 +7,8 @@ const MAX_RETRIES = 4;
 import { MegaClient } from "./";
 import { ParsedUrlQueryInput } from "querystring";
 import * as API from "../types/api";
+import { objMap } from "../utils";
+import { base64 } from "../crypto";
 /**
  * Mega Api provider
  */
@@ -60,7 +62,7 @@ export class MegaApiClient extends EventEmitter {
    * @returns
    */
 
-  public async request(data: API.GenericObject, retryno = 0): Promise<API.GenericObject | any> {
+  public async request(data: API.GenericObject, { retryno = 0, transform } = {}): Promise<API.GenericObject | any> {
     const params: { id: string; sid?: string } = {
       id: (this.counterId++).toString(),
     };
@@ -79,23 +81,27 @@ export class MegaApiClient extends EventEmitter {
       case (response === 0):
         Promise.resolve();
         break;
-        // RESPONSES IS A ERROR WHEN IS NEGATIVE NUMBER
+        // ERROR : NEGATIVE -1
       case (typeof response === "number" && response < 0):
         if (response === -3) {
             (retryno < MAX_RETRIES)
-            ? setTimeout(retry, Math.pow(2, retryno + 1) * 1e3)
+            ? setTimeout(retry, Math.pow(2, retryno) * 1e3)
             : Promise.reject(new Error("Server is collapsed please try later"));
         } else {
           Promise.reject(ERRORS[-response]);
         }
         break;
-        // RESPONSES IS ERROR WHEN RESPONSE IS UNDEFINED
+        // ERROR : UNDEFINED
       case (typeof response === "undefined"):
         setTimeout(retry, Math.pow(2, retryno + 1) * 1e3);
         break;
         // RESPONSE IS VALID
       default:
         if (this.keepalive && response && response.sn) await this.pull(response.sn);
+        if(transform === "buffer"){
+          const newObj = objMap(response, (v)=>base64.decrypt(v))
+          return Promise.resolve(newObj)
+        }
         return Promise.resolve(response);
         break;
     }
@@ -103,7 +109,7 @@ export class MegaApiClient extends EventEmitter {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     async function retry() {
-      const response = await self.request(data, retryno + 1);
+      const response = await self.request(data, {retryno: retryno + 1});
       Promise.resolve(response);
     }
   }

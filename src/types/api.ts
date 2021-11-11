@@ -6,6 +6,10 @@ export interface Constructor {
     SESSION_ID?: string;
   }
 
+
+ export interface Response$GetLogin { 
+   k: string; privk: string; csid: string }
+
 export interface Options$MegaApi {keepalive?: boolean; useTor?: boolean}
 export interface QueryStringApi { id: string; sid?: string }
 export interface CustomRequest {
