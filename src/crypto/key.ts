@@ -5,7 +5,7 @@ const BYTES_V1_LOGIN = [147, 196, 103, 227, 125, 176, 199, 164, 209, 190, 63, 12
 
 
 export class prepare {
-  public static v1(pass: Buffer, email: string): Buffer[] {
+  public static v1(pass: Buffer, email: string): { userHash: Buffer, passwordKey: Buffer }{
     let i: number; let j: number; let r: number;
     let passwordKey = Buffer.from(BYTES_V1_LOGIN);
     for (r = 65536; r--;) {
@@ -26,7 +26,7 @@ export class prepare {
 
     const userHash = new AES(passwordKey).encrypt.stringhash(Buffer.from(email));
 
-    return [passwordKey, userHash];
+    return {passwordKey, userHash};
   }
   /**
    * Prepare key version 2
@@ -34,12 +34,17 @@ export class prepare {
    * @param {string} salt
    * @returns password key and user hash []
    */
-  public static v2(password: Buffer, s: string | Buffer): Buffer[] {
-    if (!(s instanceof Buffer)) s = Buffer.from(s, 'base64');
+  public static v2(password: Buffer, salt: string | Buffer): { userHash: Buffer, passwordKey: Buffer } {
+    if (!(salt instanceof Buffer)) salt = Buffer.from(salt, 'base64');
+    console.log("salt", salt)
     const iterations = 100000;
     const digest = 'sha512';
-    const deriveKey = crypto.pbkdf2Sync(password, s, iterations, 32, digest);
-    return [deriveKey.slice(0, 16), deriveKey.slice(16), deriveKey];
+    const deriveKey = crypto.pbkdf2Sync(password, salt, iterations, 32, digest);
+
+    return {
+      userHash: deriveKey.slice(16),
+      passwordKey: deriveKey.slice(0, 16)
+    }
   }
 }
 
@@ -83,10 +88,10 @@ export function mergeKeyMac(key: Buffer, mac: Buffer): Buffer {
 export function deriveKeys(password: string, masterKey: Buffer): { hak: Buffer; crv: Buffer, k: Buffer, aes: AES} {
   const crv = randomBytes(16);
   const salt = createSalt(crv);
-  const [passwordKey, hashUser] = key.prepare.v2(Buffer.from(password, "utf8"), salt);
+  const {passwordKey, userHash} = key.prepare.v2(Buffer.from(password, "utf8"), salt);
   const KEY_AES = new AES(passwordKey);
   const hak = createHash("sha256")
-      .update(hashUser)
+      .update(userHash)
       .digest()
       .subarray(0, 16);
 

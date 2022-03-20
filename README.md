@@ -28,7 +28,7 @@ Typescript version of the Pastebin API client
 import { login } from "@gxldxm/mega-api"
 
 async function main(){
-    let user = await login({
+    let client = await login({
         email: "EMAIL@TEST.COM",
         password: "SECRET_PASSWORD",
         useTor: true //if you has installed tor in command line can use this

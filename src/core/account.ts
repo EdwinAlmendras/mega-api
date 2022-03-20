@@ -12,7 +12,7 @@ import { generateRandomUser } from "../utils/random";
 import * as Account from "../types/account";
 import * as API from "../types/api";
 
-export default class MegaAccount extends EventEmitter {
+export class MegaAccount extends EventEmitter {
   SESSION_ID: string;
   change: {
     email: typeof changeEmail,
@@ -22,9 +22,13 @@ export default class MegaAccount extends EventEmitter {
     super();
   }
   public async login({ email, password, fetch }: Account.Params$Login): Promise<boolean> {
+
     const RSA_PRIVK_LENGTH = 43
+
     const passwordBytes = Buffer.from(password, "utf8");
-    const [passwordKey, userHash] = this._loginGetHashAndPasswordKey(passwordBytes, email)
+
+    const { passwordKey, userHash } = await this._loginGetHashAndPasswordKey(passwordBytes, email)
+
     let aes = new AES(passwordKey);
 
     const params = {
@@ -33,37 +37,55 @@ export default class MegaAccount extends EventEmitter {
       uh: base64.encrypt(userHash),
     };
 
-    const { k, privk, csid }: API.Response$GetLogin = await this.client.api.request(params, { transform: "buffer" });
-
-    const MASTER_KEY = aes.decrypt.ecb(k);
-    const KEY_AES = this.client.state.MASTER_KEY = new AES(MASTER_KEY);
-    const RSA_PRIVK = this.client.state.RSA_PRIVATE_KEY = cryptoDecodePrivKey(KEY_AES.decrypt.ecb(privk));
-    const bufferSessionId = cryptoRsaDecrypt(csid, RSA_PRIVK).slice(0, RSA_PRIVK_LENGTH)
-
-    this.client.state.SESSION_ID = base64.encrypt(bufferSessionId);
-    this.client.state.KEY_AES = KEY_AES;
+    let response;
 
     try {
-      await this.data();
-      if (fetch) await this.client.files.fetch(); return Promise.resolve(true)
+
+      response  = await this.client.api.request(params, { transform: "buffer" });
+
     } catch (error) {
+
+      return Promise.reject(error)
+    }
+
+    const { k, privk, csid } = response
+
+    const MASTER_KEY = this.client.state.MASTER_KEY = aes.decrypt.ecb(k);
+
+    const KEY_AES = this.client.state.KEY_AES = new AES(MASTER_KEY);
+    
+    const RSA_PRIVK = this.client.state.RSA_PRIVATE_KEY = cryptoDecodePrivKey(KEY_AES.decrypt.ecb(privk));
+
+    const sessionIdBuffer = cryptoRsaDecrypt(csid, RSA_PRIVK).slice(0, RSA_PRIVK_LENGTH)
+
+    this.client.state.SESSION_ID = base64.encrypt(sessionIdBuffer);
+
+    try {
+
+      await this.data();
+
+      if (fetch) await this.client.files.fetch(); return Promise.resolve(true)
+
+    } catch (error) {
+
       Promise.reject(new Error(error));
+
     }
 
   }
-  private async _loginGetHashAndPasswordKey(pwB, email): Buffer[] {
+  private async _loginGetHashAndPasswordKey(passwordBytes, email): Promise<{ userHash: Buffer, passwordKey: Buffer}> {
     const { v: version, s: salt } = await this.client.api.request({ a: "us0", user: email });
     if (version === 1) {
       let credentials = key.prepare.v1(passwordBytes, email)
       return Promise.resolve(credentials)
     } else if (version === 2) {
-      let credentials = key.prepare.v2(passwordBytes, email)
+      let credentials = key.prepare.v2(passwordBytes, salt)
       return Promise.resolve(credentials)
     } else {
       return Promise.reject("VERSION_ACCOUNT_DONT_SUPPORTED")
     }
   }
-
+/* 
   public async register(user?: any): Promise<void> {
     try {
       user = !user && await generateRandomUser();
@@ -96,7 +118,7 @@ export default class MegaAccount extends EventEmitter {
       Promise.reject(new Error(error));
     }
   }
-
+ */
   public async anonymous(): Promise<void> {
     try {
       const masterKey = randomBytes(16);
@@ -202,11 +224,11 @@ export default class MegaAccount extends EventEmitter {
     }
   }
 }
-Account.prototype.change = {
+/* Account.prototype.change = {
   email: changeEmail,
   password: changePassword,
 };
-
+ */
 async function changeEmail({ email }): Promise<void> {
   await this.client.api.request({
     a: 'se', // Set Email

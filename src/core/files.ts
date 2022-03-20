@@ -1,19 +1,13 @@
-/* eslint-disable max-len */
-/* eslint-disable require-jsdoc */
-/* eslint-disable no-async-promise-executor */
 import { randomBytes } from "crypto";
-import { GenericObject, Schema$File, Schema$Properties } from "../types";
+import { GenericObject, Schema$File, Schema$Properties, Params$GetData } from "../types";
 import { MegaClient } from "./";
 import Properties from "./properties";
 import axios, { AxiosResponse } from "axios";
 import { PassThrough } from "stream";
 import { v4 } from "uuid";
 import { uniq } from "lodash";
-import { Params$GetData } from "../types";
 import EventEmitter from "events";
-// import {pipeline} from "stream";
 import { MegaApiClient } from "./api";
-const KEY_CACHE = {};
 import {
   base64,
   AES,
@@ -21,42 +15,10 @@ import {
   createDecrypterStream,
   constantTimeCompare,
 } from "../crypto";
-import fetch from "node-fetch";
-import { URL } from "url";
-import { writeFileSync } from "fs";
+import { headersThumbnailRequest } from "../helpers";
+
+const KEY_CACHE = {};
 // const TYPE_FILE_DATA = ["file", "thumbnail", "preview"];
-
-
-interface Params$Tiktok { user?: string; hashtag?: string; music?: string }
-/**
- * Class uploader - return instance upload - for upload any into folder
- */
-export class Uploader {
-  FOLDER_ROOT: string
-  // eslint-disable-next-line require-jsdoc
-  constructor(public client: MegaApiClient) {
-  }
-
-  /**
-   * tiktok - upload every in mega account easy
-   * @param {Object} param0
-   * @param {Object} options
-   */
-  /*   async tiktok({ user, hashtag, music }: Params$Tiktok, options: TikTokOptions): Promise<void> {
-      let response: tiktok.Result;
-      if (user) {
-        response = await tiktok.user(user, options);
-      } else if (hashtag) {
-        response = await tiktok.hashtag(user, options);
-      } else if (music) {
-        response = await tiktok.user(user, options);
-      }
-      console.log(response);
-      /*  for await (const {} of response.collector) {
-
-      }
-    } */
-}
 
 
 /**
@@ -67,7 +29,7 @@ export default class Files extends EventEmitter {
   public ID_TRASH: string;
   public ID_INBOX: string;
   public shareKeys: GenericObject; // { BUffer}
-  public data: Schema$File[];
+  public data: Schema$File[] = [];
   private KEY_AES: AES
   private api: MegaApiClient;
   constructor(protected client: MegaClient) {
@@ -77,39 +39,35 @@ export default class Files extends EventEmitter {
   }
   /**
    * fetch fetch all mount files for user storage
-   * @return {null}
    */
-  public fetch(): Promise<Schema$File[]> {
-    return new Promise(async (resolve, reject) => {
-      this.data = [];
+  public async fetch(): Promise<Schema$File[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let response: { ok: { h: string; ha: string; k: string; }[], f: any[] };
+    try {
+      response = await this.client.api.request({
+        a: "f",
+        c: 1,
+      });
+    } catch (error) {
+      return Promise.reject(error);
+    }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let response: { ok: { h: string; ha: string; k: string; }[], f: any[] };
-      try {
-        response = await this.client.api.request({
-          a: "f",
-          c: 1,
-        });
-      } catch (error) {
-        reject(error);
+    const { ok, f } = response;
+
+    this.shareKeys = ok.reduce((shares, share) => {
+      const handler = share.h;
+      const auth = this.client.state.KEY_AES.encrypt.ecb(Buffer.from(handler + handler, "utf8"));
+      // console.log(share, auth, handler);
+      if (constantTimeCompare(base64.decrypt(share.ha), auth)) {
+        shares[handler] = this.client.state.KEY_AES.decrypt.ecb(base64.decrypt(share.k));
       }
-      const { ok, f } = response;
+      return shares;
+    }, {});
 
-      this.shareKeys = ok.reduce((shares, share) => {
-        const handler = share.h;
-        const auth = this.client.state.KEY_AES.encrypt.ecb(Buffer.from(handler + handler, "utf8"));
-        // console.log(share, auth, handler);
-        if (constantTimeCompare(base64.decrypt(share.ha), auth)) {
-          shares[handler] = this.client.state.KEY_AES.decrypt.ecb(base64.decrypt(share.k));
-        }
-        return shares;
-      }, {});
-
-      for await (const file of f) {
-        this.compose(file);
-      }
-      resolve(this.data);
-    });
+    for await (const file of f) {
+      this.compose(file);
+    }
+    return Promise.resolve(this.data);
   }
 
   /**
@@ -245,50 +203,53 @@ export default class Files extends EventEmitter {
    * @param {Object}
    * @returns {AxiosResponse["data"]}
    */
-  public geData({
+  public async getData({
     nodeId,
     options,
     responseType,
   }: Params$GetData): Promise<AxiosResponse["data"]> {
-    return new Promise(async (resolve, reject) => {
-      const file = this.get({ nodeId });
-      responseType ||= "stream";
-      options ||= {
-        ssl: 0,
-        config: {
-          responseType,
-        },
-      };
-      const { ssl, config } = options;
+    const file = this.get({ nodeId });
 
-      const { g }: { g: string } = await this.api.request({
-        a: "g",
-        g: 1,
-        n: nodeId,
-        ssl: ssl || 0,
-      });
+    responseType ||= "stream";
 
-      let response: AxiosResponse;
-      try {
-        response = await this.api.axios.get(g, config);
-      } catch (error) {
-        reject(error);
-      }
+    options ||= {
+      ssl: 0,
+      config: {
+        responseType,
+      },
+    };
+    const { ssl, config } = options;
 
-      if (config?.responseType === "stream" || responseType === "stream") {
-        const stream = new PassThrough();
-        const descrypter = createDecrypterStream(file.key);
-        response.data.pipe(descrypter).pipe(stream);
-        resolve(stream);
-      } else {
-        console.log("isnot stream");
-        resolve(response.data);
-      }
+    const { g }: { g: string } = await this.api.request({
+      a: "g",
+      g: 1,
+      n: nodeId,
+      ssl: ssl || 0,
     });
-  }
-  /*   private getDownloadData {
 
-  } */
+    let response: AxiosResponse;
+
+    try {
+      response = await this.api.axios.get(g, config);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+
+    if (config?.responseType === "stream" || responseType === "stream") {
+
+      const stream = new PassThrough();
+
+      const descrypter = createDecrypterStream(file.key);
+
+      response.data.pipe(descrypter).pipe(stream);
+
+      return Promise.resolve(stream);
+
+    } else {
+
+      return Promise.resolve(response.data);
+    }
+  }
   /**
    * Get the thumbnail buffer
    * @param {nodeId} node Id handle file
@@ -305,29 +266,13 @@ export default class Files extends EventEmitter {
     });
     const hash = base64.decrypt(thumbId2);
     const url = thumbUrl + "/0";
-    const headers = {
-      "Origin": "https://mega.nz",
-      "User-Agent": "Mozilla/ 5.0(Linux; Android 10; SM - M115F) AppleWebKit / 537.36(KHTML, like Gecko) Chrome / 88.0.4324.152 Mobile Safari / 537.36",
-      "Accept": "*/*",
-      "Referer": "https://mega.nz/",
-      "Accept-Encoding": "gzip, deflate, br",
-      "Accept-Language": "es-ES,es;q=0.9",
-      "Connection": "keep-alive",
-      "Content-Length": "8",
-      "sec-ch-ua": `" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"`,
-      "sec-ch-ua-mobile": "?0",
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "cross-site",
-      "Content-Type": "application/octet-stream",
-    };
     try {
       const { data } = await axios({
         url,
         method: "POST",
         data: hash,
         responseType: "arraybuffer",
-        headers,
+        headers: headersThumbnailRequest,
       });
       const aes = getCipher(file.key);
       const thumb = aes.decrypt.cbc(data.slice(12, data.length));
@@ -336,12 +281,6 @@ export default class Files extends EventEmitter {
       return Promise.reject(error);
     }
   }
-
-  /**
-   *
-   * @param param0
-   * @returns
-   */
 
   public async getThumbnails(nodes: string[]): Promise<any[]> {
     const files: any[] = nodes.map((e) => {
@@ -356,7 +295,6 @@ export default class Files extends EventEmitter {
       };
     });
 
-
     const request = files.map((e) => {
       return ({
         a: "ufa",
@@ -366,46 +304,29 @@ export default class Files extends EventEmitter {
       });
     });
 
-    console.log(request)
-    const data= await this.api.custom({
+    const data = await this.api.custom({
       data: request,
       config: {
         method: "POST",
       },
     });
 
-    console.log(data)
+    for await (const [index, { p }] of data.entries()) {
 
-    for await (const [index, {p}] of data.entries()) {
-      console.log(index)
       const url = p + "/0";
-      console.log(url)
-      const headers = {
-        "Origin": "https://mega.nz",
-        "User-Agent": "Mozilla/ 5.0(Linux; Android 10; SM - M115F) AppleWebKit / 537.36(KHTML, like Gecko) Chrome / 88.0.4324.152 Mobile Safari / 537.36",
-        "Accept": "*/*",
-        "Referer": "https://mega.nz/",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "es-ES,es;q=0.9",
-        "Connection": "keep-alive",
-        "Content-Length": "8",
-        "sec-ch-ua": `" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"`,
-        "sec-ch-ua-mobile": "?0",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "cross-site",
-        "Content-Type": "application/octet-stream",
-      };
 
       const { data } = await axios({
         url,
         method: "POST",
         data: files[index].hash,
         responseType: "arraybuffer",
-        headers,
+        headers: headersThumbnailRequest,
       });
+
       const aes = getCipher(files[index].key);
+
       const thumbBuffer = aes.decrypt.cbc(data.slice(12, data.length));
+
       files[index].thumbBuffer = thumbBuffer;
     }
 
@@ -440,7 +361,7 @@ export default class Files extends EventEmitter {
       currentFile = this.list({
         folderId: currentFile?.nodeId || this.client.state.ID_ROOT_FOLDER,
       })
-          .find((e) => e.properties.name === route);
+        .find((e) => e.properties.name === route);
     });
     if (!currentFile) Promise.reject(new Error("DONT MATCH THIS MATH"));
     return Promise.resolve(currentFile);
@@ -800,9 +721,9 @@ function makeCryptoRequest(files: Files, sources: any, shares?: string[]) {
 
   if (!shares) {
     shares = sources
-        .map((source) => getShares(shareKeys, source))
-        .reduce((arr, el) => arr.concat(el))
-        .filter((el, index, arr) => index === arr.indexOf(el));
+      .map((source) => getShares(shareKeys, source))
+      .reduce((arr, el) => arr.concat(el))
+      .filter((el, index, arr) => index === arr.indexOf(el));
   }
   const cryptoRequest = [
     shares,
@@ -827,15 +748,9 @@ function makeCryptoRequest(files: Files, sources: any, shares?: string[]) {
 
   return cryptoRequest;
 }
-
 function searchByName(data: Schema$File[], name: string): Schema$File {
   return data.find((e) => name === e?.properties?.name);
 }
-
 function searchByNode(data: Schema$File[], nodeId: string): Schema$File {
   return data.find((e) => nodeId === e.nodeId);
 }
-function config(thumbUrl: any, hash: Buffer, config: any, arg3: { headers: { "Content-Type": string; Origin: string; "User-Agent": string; Accept: string; Referer: string; "Accept-Encoding": string; "Accept-Language": string; }; }) {
-  throw new Error("Function not implemented.");
-}
-

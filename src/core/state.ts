@@ -1,4 +1,5 @@
 import { AxiosInstance } from "axios";
+import { AES } from "../crypto";
 import * as Constants from "./constants";
 /**
  * Manage global data of the application
@@ -10,7 +11,7 @@ export class State {
   axios: AxiosInstance;
   RSA_PRIVATE_KEY: boolean | number[];
   SESSION_ID: string;
-  KEY_AES: import("c:/Users/User/pro/mega-api/src/crypto/aes").AES;
+  KEY_AES: AES;
   MASTER_KEY: Buffer;
   name: string;
   USER_ID: string;

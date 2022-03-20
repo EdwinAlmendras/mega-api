@@ -15,10 +15,15 @@ export function encryptBase64(buffer: Buffer): string {
 }
 
 export function decryptBase64(data: string): Buffer {
-  data = data
-      .replace(/-/g, "+")
-      .replace(/_/g, "/")
-      .replace(/,/g, "");
+  if(typeof data === "string"){
+    data = data
+    .replace(/-/g, "+")
+    .replace(/_/g, "/")
+    .replace(/,/g, "");
+  }
+  else {
+    return data
+  }
   return Buffer.from(data, "base64");
 }
 
