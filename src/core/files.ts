@@ -233,7 +233,7 @@ console.log("findish")
     const defaultConfigAxios: AxiosRequestConfig = { responseType: "stream" };
     const configAxios = config || defaultConfigAxios;
 
-    let downloadUrl;
+    let downloadUrl = url;
     if (!url) {
       console.log("dont found url")
       // Made request of the file
