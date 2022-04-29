@@ -50,7 +50,10 @@ export default class Files extends EventEmitter {
      * @param {Object}
      * @returns {AxiosResponse["data"]}
      */
-    getSource({ nodeId, config, useSSL, range, url, }: Params$GetData): Promise<AxiosResponse["data"]>;
+    getSource({ nodeId, config, useSSL, range, url, }: Params$GetData): Promise<{
+        data: AxiosResponse["data"];
+        url: string;
+    }>;
     getThumbs({ nodes, previewType, }: {
         nodes: any;
         previewType: any;

@@ -265,7 +265,7 @@ console.log("findish")
 
       response.data.pipe(descrypter).pipe(stream);
 
-      return Promise.resolve(stream);
+      return Promise.resolve({ data: response.data, url: downloadUrl});
     } else {
       // TODO PENDIG DECRUPTING BUFFER OR ANY OTHER DATA
 
