@@ -269,7 +269,7 @@ console.log("findish")
     } else {
       // TODO PENDIG DECRUPTING BUFFER OR ANY OTHER DATA
 
-      return Promise.resolve(response.data);
+      return Promise.resolve({ data: response.data, url: downloadUrl});
     }
   }
 
