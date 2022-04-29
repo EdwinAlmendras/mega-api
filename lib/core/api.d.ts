@@ -3,16 +3,12 @@ import { AxiosInstance, AxiosRequestConfig } from "axios";
 import { EventEmitter } from "events";
 import { MegaClient } from "./";
 import * as API from "../types/api";
-/**
- * Mega Api provider
- */
 export declare class MegaApiClient extends EventEmitter {
     private client;
     axios: AxiosInstance;
     keepalive: boolean;
     counterId: any;
     sid: string;
-    masterKey: Buffer;
     sn: any;
     errors: {
         1: string;
@@ -44,11 +40,11 @@ export declare class MegaApiClient extends EventEmitter {
      * @param config axios config custom
      * @returns {Object} response data axios
      */
-    custom({ data, params, config }: API.CustomRequest): Promise<API.GenericObject>;
+    custom({ data, params, config, }: API.CustomRequest): Promise<API.GenericObject[]>;
     request(obj: API.GenericObject, { retryno, transform }?: {
         retryno?: number;
         transform?: string;
-    }): Promise<API.GenericObject | any>;
+    }): Promise<any>;
     private pull;
     private wait;
     protected close(): void;

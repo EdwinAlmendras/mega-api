@@ -1,8 +1,14 @@
 import { randomBytes } from "crypto";
-import { GenericObject, Schema$File, Schema$Properties, Params$GetData } from "../types";
+import {
+  GenericObject,
+  Schema$File,
+  Schema$Properties,
+  Params$GetData,
+} from "../types";
+import * as Types from "../types";
 import { MegaClient } from "./";
 import Properties from "./properties";
-import axios, { AxiosResponse } from "axios";
+import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 import { PassThrough } from "stream";
 import { v4 } from "uuid";
 import { uniq } from "lodash";
@@ -15,34 +21,37 @@ import {
   createDecrypterStream,
   constantTimeCompare,
 } from "../crypto";
-import { headersThumbnailRequest } from "../helpers";
+import { headers } from "../helpers";
 
 const KEY_CACHE = {};
-// const TYPE_FILE_DATA = ["file", "thumbnail", "preview"];
-
-
+const TYPE_FILE_DATA = ["file", "thumbnail", "preview"];
+const FOLDERS = {
+  ROOT: 2,
+  TRASH: 3,
+  INBOX: 4,
+};
 /**
  * Main class files for every purpose file
  */
 export default class Files extends EventEmitter {
-  public ID_ROOT_FOLDER: string;
-  public ID_TRASH: string;
-  public ID_INBOX: string;
+  public folderIds: {
+    root: string;
+    trash: string;
+    inbox: string;
+  } = { root: "", trash: "", inbox: ""};
   public shareKeys: GenericObject; // { BUffer}
   public data: Schema$File[] = [];
-  private KEY_AES: AES
+  private KEY_AES: AES;
   private api: MegaApiClient;
   constructor(protected client: MegaClient) {
     super();
     this.KEY_AES = this.client.state.KEY_AES;
     this.api = this.client.api;
   }
-  /**
-   * fetch fetch all mount files for user storage
-   */
   public async fetch(): Promise<Schema$File[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let response: { ok: { h: string; ha: string; k: string; }[], f: any[] };
+    let response: { ok: { h: string; ha: string; k: string }[]; f: any[] };
+
     try {
       response = await this.client.api.request({
         a: "f",
@@ -52,21 +61,27 @@ export default class Files extends EventEmitter {
       return Promise.reject(error);
     }
 
-    const { ok, f } = response;
+    const { f } = response;
 
-    this.shareKeys = ok.reduce((shares, share) => {
+    this.shareKeys = response.ok.reduce((shares, share) => {
       const handler = share.h;
-      const auth = this.client.state.KEY_AES.encrypt.ecb(Buffer.from(handler + handler, "utf8"));
+      const auth = this.client.state.KEY_AES.encrypt.ecb(
+        Buffer.from(handler + handler, "utf8")
+      );
       // console.log(share, auth, handler);
       if (constantTimeCompare(base64.decrypt(share.ha), auth)) {
-        shares[handler] = this.client.state.KEY_AES.decrypt.ecb(base64.decrypt(share.k));
+        shares[handler] = this.client.state.KEY_AES.decrypt.ecb(
+          base64.decrypt(share.k)
+        );
       }
       return shares;
     }, {});
 
     for await (const file of f) {
       this.compose(file);
+    
     }
+console.log("findish")
     return Promise.resolve(this.data);
   }
 
@@ -76,30 +91,32 @@ export default class Files extends EventEmitter {
    * @returns {void}
    */
   public compose(f): Schema$File {
-    if (!this.data.find((e) => e.nodeId === f.h)) {
+    const fileExists = this.data.find((e) => e?.nodeId === f.h);
+    if (!fileExists) {
       const file = this.parse(f);
       switch (f.t) {
-        case 2:
-          this.ID_ROOT_FOLDER = this.client.state.ID_ROOT_FOLDER = f["h"];
+        case FOLDERS.ROOT:
+          this.folderIds.root = this.client.state.ID_ROOT_FOLDER = f["h"];
           file.name = "Cloud Drive";
+          file.nodeId = f["h"];
           break;
-        case 3:
-          this.ID_TRASH = this.client.state.ID_TRASH = f["h"];
+        case FOLDERS.TRASH:
+          this.folderIds.trash = this.client.state.ID_TRASH = f["h"];
           file.name = "Rubbish Bin";
+          file.nodeId = f["h"];
           break;
-        case 4:
-          this.ID_INBOX = this.client.state.ID_FOLDER_INBOX = f["h"];
+        case FOLDERS.INBOX:
+          this.folderIds.inbox = this.client.state.ID_FOLDER_INBOX = f["h"];
           file.name = "Inbox";
+          file.nodeId = f["h"];
           break;
-
         default:
-
           break;
       }
-
       this.data.push(file);
+      return file
+      
     }
-    return this.data.find((e) => e.nodeId === f.h);
   }
 
   /**
@@ -169,7 +186,9 @@ export default class Files extends EventEmitter {
 
     const parts = file.k.split(":");
     const key = base64.decrypt(parts[parts.length - 1]);
-    metadata.key = aes ? aes.decrypt.ecb(key) : this.client.state.KEY_AES.decrypt.ecb(key);
+    metadata.key = aes
+      ? aes.decrypt.ecb(key)
+      : this.client.state.KEY_AES.decrypt.ecb(key);
     if (file.a) {
       const properties = Properties.decrypt(file.a, key);
       metadata = {
@@ -181,62 +200,65 @@ export default class Files extends EventEmitter {
   }
 
   /**
-   * Gets download url from node
-   * @param param0
-   * @returns
-   */
-
-  /**
    * Get - gets a file data by name or nodeid
    * @param {Object}
    * @returns {Schema$File}
    */
-  public get({ nodeId, name, parent }: { nodeId?: string; name?: string; parent?: string }): Schema$File {
-    return nodeId ?
-      searchByNode(this.data, nodeId) :
-      parent ?
-        searchByName(this.data.filter((e) => e.parent === parent), name) :
-        searchByName(this.data, name);
+  public get({ nodeId, name, parent }: Types.Params$Get): Schema$File {
+    if (nodeId) {
+      if (parent) {
+        searchByName(
+          this.data.filter((e) => e.parent === parent),
+          name
+        );
+      }
+      return searchByNode(this.data, nodeId);
+    } else if (name) {
+      return searchByName(this.data, name);
+    }
   }
   /**
    * Gets data from file, customizable with responseType oprion
    * @param {Object}
    * @returns {AxiosResponse["data"]}
    */
-  public async getData({
+  public async getSource({
     nodeId,
-    options,
-    responseType,
+    config,
+    useSSL,
+    range,
+    url,
   }: Params$GetData): Promise<AxiosResponse["data"]> {
     const file = this.get({ nodeId });
+    const defaultConfigAxios: AxiosRequestConfig = { responseType: "stream" };
+    const configAxios = config || defaultConfigAxios;
 
-    responseType ||= "stream";
+    let downloadUrl;
+    if (!url) {
+      console.log("dont found url")
+      // Made request of the file
+      const response = await this.api.request({
+        a: "g",
+        g: 1,
+        n: nodeId,
+        ssl: useSSL ? 1 : 0,
+      });
+      downloadUrl = response.g;
+    }
 
-    options ||= {
-      ssl: 0,
-      config: {
-        responseType,
-      },
-    };
-    const { ssl, config } = options;
-
-    const { g }: { g: string } = await this.api.request({
-      a: "g",
-      g: 1,
-      n: nodeId,
-      ssl: ssl || 0,
-    });
+    const startRange = range?.start || 0;
+    const endRange = range?.end || String(file.size);
+    const urlRange = `${downloadUrl}/${startRange}-${endRange}`;
 
     let response: AxiosResponse;
 
     try {
-      response = await this.api.axios.get(g, config);
+      response = await this.api.axios.get(urlRange, configAxios);
     } catch (error) {
       return Promise.reject(error);
     }
 
-    if (config?.responseType === "stream" || responseType === "stream") {
-
+    if (configAxios.responseType === "stream") {
       const stream = new PassThrough();
 
       const descrypter = createDecrypterStream(file.key);
@@ -244,93 +266,106 @@ export default class Files extends EventEmitter {
       response.data.pipe(descrypter).pipe(stream);
 
       return Promise.resolve(stream);
-
     } else {
+      // TODO PENDIG DECRUPTING BUFFER OR ANY OTHER DATA
 
       return Promise.resolve(response.data);
     }
+  }
+
+  public async getThumbs({
+    nodes,
+    previewType,
+  }): Promise<{ nodeId: string; data: Buffer }[]> {
+    const previewTypes = {
+      thumbnail: 1,
+      preview: 0,
+    };
+
+    const getThumbsIds = (file): [string, string] =>
+      file.thumbs.split("/")[1].split("*");
+
+    const files = nodes.map((nodeId) => this.get({ nodeId }));
+    const type = previewTypes[previewType];
+
+    const requestData = files.map((file) => {
+      console.log(getThumbsIds(file))
+      return {
+        a: "ufa",
+        fah: (getThumbsIds(file))[1],
+        r: 1,
+        ssl: 0,
+      };
+    });
+
+    console.log(requestData)
+    const response = await this.api.custom({ data: requestData });
+
+    let thumbs = [];
+
+    for await (const [index, item] of response.entries()) {
+      console.log(item)
+      const url = `${item.p}/${type}`;
+      const file = files[index];
+      const hash = base64.decrypt(getThumbsIds(file)[1]);
+
+      const { data } = await axios({
+        url,
+        method: "POST",
+        data: hash,
+        responseType: "arraybuffer",
+        headers: headers.requestThummbnail,
+      });
+
+      const aes = getCipher(file.key);
+      const dataNormalized = data.slice(12, data.length);
+      const bufferThumb = aes.decrypt.cbc(dataNormalized);
+      thumbs.push({
+        nodeId: file.nodeId,
+        data: bufferThumb,
+      });
+    }
+
+    return Promise.resolve(thumbs);
   }
   /**
    * Get the thumbnail buffer
    * @param {nodeId} node Id handle file
    * @returns {Promise}
-  */
+   */
   public async getThumbnail({ nodeId }: { nodeId: string }): Promise<Buffer> {
     const file = this.get({ nodeId });
+
     const thumbId2 = file.thumbs.split("/")[1].split("*")[1];
+
     const { p: thumbUrl } = await this.api.request({
       a: "ufa",
       fah: thumbId2,
       r: 1,
       ssl: 1,
     });
+
     const hash = base64.decrypt(thumbId2);
+
     const url = thumbUrl + "/0";
+
     try {
       const { data } = await axios({
         url,
         method: "POST",
         data: hash,
         responseType: "arraybuffer",
-        headers: headersThumbnailRequest,
+        headers: headers.requestThummbnail,
       });
+
       const aes = getCipher(file.key);
+
       const thumb = aes.decrypt.cbc(data.slice(12, data.length));
+
       return Promise.resolve(thumb);
     } catch (error) {
       return Promise.reject(error);
     }
-  }
-
-  public async getThumbnails(nodes: string[]): Promise<any[]> {
-    const files: any[] = nodes.map((e) => {
-      const file = this.get({ nodeId: e });
-      const thumbId = file.thumbs.split("/")[1].split("*")[1];
-      const hash = base64.decrypt(thumbId);
-
-      return {
-        ...file,
-        thumbId,
-        hash,
-      };
-    });
-
-    const request = files.map((e) => {
-      return ({
-        a: "ufa",
-        fah: e.thumbId,
-        r: 1,
-        ssl: 1,
-      });
-    });
-
-    const data = await this.api.custom({
-      data: request,
-      config: {
-        method: "POST",
-      },
-    });
-
-    for await (const [index, { p }] of data.entries()) {
-
-      const url = p + "/0";
-
-      const { data } = await axios({
-        url,
-        method: "POST",
-        data: files[index].hash,
-        responseType: "arraybuffer",
-        headers: headersThumbnailRequest,
-      });
-
-      const aes = getCipher(files[index].key);
-
-      const thumbBuffer = aes.decrypt.cbc(data.slice(12, data.length));
-
-      files[index].thumbBuffer = thumbBuffer;
-    }
-
-    return Promise.resolve(files);
   }
 
   /**
@@ -338,9 +373,12 @@ export default class Files extends EventEmitter {
    * @param {Object}
    * @returns {Schema$File[]}
    */
-  public list({ folderId, onlyFolders }: {
+  public list({
+    folderId,
+    onlyFolders,
+  }: {
     folderId?: string;
-    onlyFolders?: boolean
+    onlyFolders?: boolean;
   }): Schema$File[] {
     // eslint-disable-next-line require-jsdoc
     function filterReducer(file) {
@@ -360,8 +398,7 @@ export default class Files extends EventEmitter {
     routes.forEach((route) => {
       currentFile = this.list({
         folderId: currentFile?.nodeId || this.client.state.ID_ROOT_FOLDER,
-      })
-        .find((e) => e.properties.name === route);
+      }).find((e) => e.properties.name === route);
     });
     if (!currentFile) Promise.reject(new Error("DONT MATCH THIS MATH"));
     return Promise.resolve(currentFile);
@@ -371,32 +408,35 @@ export default class Files extends EventEmitter {
    * @param {Object} options
    * @returns {Promise}
    */
-  public dir(options: {
+  public makedir(options: {
     name: string;
     parent: string;
     parentName?: string;
-    properties?: Schema$Properties
+    properties?: Schema$Properties;
   }): Promise<Schema$File> {
     return new Promise(async (resolve) => {
-      const {
-        name,
-        parent,
-        parentName,
-        properties,
-      } = options;
+      const { name, parent, parentName, properties } = options;
 
-      const t: string = parent || (await this.get({ name: parentName })).parent || this.ID_ROOT_FOLDER;
+      const t: string =
+        parent ||
+        (await this.get({ name: parentName })).parent ||
+        this.client.state.ID_ROOT_FOLDER;
       const key = randomBytes(16);
-      const node = [{
-        h: "xxxxxxxx",
-        t: 1,
-        a: base64.encrypt(getCipher(key).encrypt.cbc(Properties.pack({
-          n: name,
-          ...properties,
-        }))),
-        k: base64.encrypt(this.client.state.KEY_AES.encrypt.ecb(key)),
-      }];
-
+      const node = [
+        {
+          h: "xxxxxxxx",
+          t: 1,
+          a: base64.encrypt(
+            getCipher(key).encrypt.cbc(
+              Properties.pack({
+                n: name,
+                ...properties,
+              })
+            )
+          ),
+          k: base64.encrypt(this.client.state.KEY_AES.encrypt.ecb(key)),
+        },
+      ];
 
       const response = await this.api.request({
         a: "p",
@@ -408,76 +448,84 @@ export default class Files extends EventEmitter {
     });
   }
 
-
   /**
    * Creates directory recursively
    * @example rdir("asd/daw/faadcs")
    * @param {Object}
    * @returns {void}
    */
-  public rdir({ path, parent }: { path?: string; parent?: string }): Promise<void> {
+  public rdir({
+    path,
+    parent,
+  }: {
+    path?: string;
+    parent?: string;
+  }): Promise<void> {
     return new Promise(async (resolve) => {
       const dirs = path.split("/");
-      if (!parent) parent = this.ID_ROOT_FOLDER;
+      if (!parent) parent = this.client.state.ID_ROOT_FOLDER;
       for await (const dirname of dirs) {
         const handler = this.get({ name: dirname });
         if (handler) {
           parent = handler.nodeId;
           continue;
         }
-        const folder = await this.dir({
+        const folder = await this.makedir({
           name: dirname,
           parent,
         });
         parent = folder.nodeId;
       }
-
       resolve();
     });
   }
 
-  public search(text: string): Promise<Schema$File[] | boolean> {
-    return new Promise(async (resolve) => {
-      const files = [];
-      for (const filesId in this.data) {
-        const { name, nodeId, createdTime, key, downloadId } = this.data[filesId];
-        if (!name) continue;
-        if (name.includes(text)) {
-          files.push({
-            name,
-            nodeId,
-            createdTime,
-            key,
-            dl: downloadId || false,
-          });
-        }
+  public search(text: string): Schema$File[] {
+    const files = [];
+    for (const filesId in this.data) {
+      const { name, nodeId, createdTime, key, downloadId } = this.data[filesId];
+      if (!name) continue;
+      if (name.includes(text)) {
+        files.push({
+          name,
+          nodeId,
+          createdTime,
+          key,
+          dl: downloadId || false,
+        });
       }
-      if (files.length === 0) resolve(false);
-      resolve(files);
-    });
+    }
+    if (files.length === 0) return null;
+    return files;
   }
   // OK
-  public exists(name: string): Promise<boolean> {
-    return new Promise(async (resolve) => {
-      for (const filesId in this.data) {
-        if (!this.data[filesId].name) continue;
-        if (this.data[filesId].name.includes(name)) {
-          resolve(true);
-        }
+  public exists(name: string): boolean {
+    for (const filesId in this.data) {
+      if (!this.data[filesId].name) continue;
+      if (this.data[filesId].name.includes(name)) {
+        return true;
       }
-      resolve(false);
-    });
+    }
+    return false;
   }
+
   public isDir(nodeId: string): boolean {
     const { isDir } = this.data.find((e) => e.nodeId === nodeId);
     return isDir;
   }
+
   /**
    * Deletes a file permanently or move to trash bin
    * @param {Object} params
    * @returns {Promise}
    */
-  public async delete({ nodeId, permanent }: { nodeId: string; permanent?: boolean }): Promise<void> {
+  public async delete({
+    nodeId,
+    permanent,
+  }: {
+    nodeId: string;
+    permanent?: boolean;
+  }): Promise<void> {
     if (permanent) {
       try {
         await this.api.request({
@@ -492,7 +540,7 @@ export default class Files extends EventEmitter {
     try {
       await this.move({
         nodeId,
-        target: this.ID_TRASH,
+        target: this.client.state.ID_TRASH,
       });
       return Promise.resolve();
     } catch (error) {
@@ -500,7 +548,10 @@ export default class Files extends EventEmitter {
     }
   }
   // OK
-  public move({ nodeId, target }: {
+  public move({
+    nodeId,
+    target,
+  }: {
     nodeId: string;
     target: string;
   }): Promise<void> {
@@ -518,87 +569,24 @@ export default class Files extends EventEmitter {
     });
   }
   // OK
-  public update({
-    name,
-    nodeId,
-    properties,
-  }: {
-    name?: string;
-    nodeId?: string;
-    properties?: any;
-  }): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      const file = await this.get({
-        name,
-        nodeId,
+  public async update({ nodeId, properties }: Types.Params$Update): Promise<void> {
+    const file = this.get({ nodeId });
+    try {
+      const newProperties = Object.assign(file.properties, properties);
+      const unparsed = Properties.unparse(newProperties);
+      const packed = Properties.pack(unparsed);
+      getCipher(file.key).encrypt.cbc(packed);
+      // making request
+      await this.api.request({
+        a: "a",
+        n: file.nodeId,
+        at: base64.encrypt(packed),
       });
-      const { tags } = properties;
-      try {
-        // uniquify array tags if exists
-        tags && (properties.tags = uniq(file.properties.tags.concat(tags)));
 
-        const newProperties = Object.assign(file.properties, properties);
-        const unparsed = Properties.unparse(newProperties);
-        const packed = Properties.pack(unparsed);
-        getCipher(file.key).encrypt.cbc(packed);
-
-        // making request
-        await this.api.request({
-          a: "a",
-          n: file.nodeId,
-          at: base64.encrypt(packed),
-        });
-
-
-        resolve();
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
-  public shortcut({ name, nodeId }: { name?: string; nodeId?: string }, { parent, props }: any): Promise<void> {
-    return new Promise(async (resolve) => {
-      /* onclick redirects to folder */
-      const fileSource: Schema$File = await this.get({
-        name,
-        nodeId,
-      });
-      await this.get({ name: props });
-
-      let uid = fileSource.properties.uid;
-      const regex = new RegExp(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-      if (!(regex.test(uid)) || !uid) {
-        console.log("generating new uid, matched is not valid or dont exists");
-        uid = v4();
-        await this.update({
-          nodeId: fileSource.nodeId,
-          properties: { uid },
-        });
-      }
-
-      const key = randomBytes(16);
-
-      const properties = {
-        n: props.name || fileSource.name,
-        target: { uid },
-        ...props,
-      };
-
-      const resp = await this.api.request({
-        a: "p",
-        t: parent || this.ID_ROOT_FOLDER,
-        n: [
-          {
-            h: "xxxxxxxx",
-            t: 1,
-            a: base64.encrypt(getCipher(key).encrypt.cbc(Properties.pack(properties))),
-            k: base64.encrypt(this.KEY_AES.encrypt.ecb(key)),
-          },
-        ],
-      });
-      this.compose(resp.f[0]);
-      resolve();
-    });
+      return Promise.resolve();
+    } catch (err) {
+      return Promise.reject(err);
+    }
   }
 
   /**
@@ -620,12 +608,16 @@ export default class Files extends EventEmitter {
         const params = {
           a: "s2",
           n: file.nodeId,
-          s: [{
-            u: "EXP",
-            r: 0,
-          }],
+          s: [
+            {
+              u: "EXP",
+              r: 0,
+            },
+          ],
           ok: base64.encrypt(this.KEY_AES.encrypt.ecb(Buffer.from(shareKey))),
-          ha: base64.encrypt(this.KEY_AES.encrypt.ecb(Buffer.from(file.nodeId + file.nodeId))),
+          ha: base64.encrypt(
+            this.KEY_AES.encrypt.ecb(Buffer.from(file.nodeId + file.nodeId))
+          ),
           cr,
         };
 
@@ -636,41 +628,52 @@ export default class Files extends EventEmitter {
         n: file.nodeId,
       });
 
-      const url = `https://mega.nz/${file.isDir ? "folder" : "file"}/${id}#${base64.encrypt(shareKey || file.key)}`;
+      const url = `https://mega.nz/${
+        file.isDir ? "folder" : "file"
+      }/${id}#${base64.encrypt(shareKey || file.key)}`;
       return Promise.resolve(url);
     } catch (error) {
       Promise.reject(error);
     }
   }
 
-  async loadAttributes({ isDir, downloadId, key }: GenericObject): Promise<GenericObject> {
+  async loadAttributes({
+    isDir,
+    downloadId,
+    key,
+  }: GenericObject): Promise<GenericObject> {
     return new Promise(async (resolve) => {
-      const req = isDir ? {
-        a: "f",
-        c: 1,
-        ca: 1,
-        r: 1,
-      } : {
-        a: "g",
-        p: downloadId,
-      };
+      const req = isDir
+        ? {
+            a: "f",
+            c: 1,
+            ca: 1,
+            r: 1,
+          }
+        : {
+            a: "g",
+            p: downloadId,
+          };
 
       const response = await this.api.custom({
         data: req,
         params: {
-          n:
-            downloadId,
+          n: downloadId,
         },
       });
       if (isDir) {
-        const nodes = response.f;
-        const rootFolder = nodes.find((node) => node.k && node.h === node.k.split(":")[0]);
+        const nodes = response[0].f;
+        const rootFolder = nodes.find(
+          (node) => node.k && node.h === node.k.split(":")[0]
+        );
         const aes = key ? new AES(key) : null;
         const folder = await Properties.loadMetadata(rootFolder, aes);
-        const filesSource: Schema$File[] = [{
-          ...folder,
-          downloadId,
-        }];
+        const filesSource: Schema$File[] = [
+          {
+            ...folder,
+            downloadId,
+          },
+        ];
         for (const file of nodes) {
           if (file === rootFolder) continue;
           const childFile = Properties.loadMetadata(file, aes);
@@ -679,10 +682,10 @@ export default class Files extends EventEmitter {
         }
         resolve(filesSource);
       } else {
-        const properties = Properties.decrypt(response.at, key);
+        const properties = Properties.decrypt(response[0].at, key);
 
         resolve({
-          size: response.s,
+          size: response[0].s,
           key,
           isDir: false,
           properties,
@@ -694,7 +697,13 @@ export default class Files extends EventEmitter {
 
 function selfAndChildren(file, files) {
   // eslint-disable-next-line max-len
-  return [file].concat(files.list(file.nodeId).map((e) => e.isDir ? selfAndChildren(e, files) : e)).reduce((arr, el) => arr.concat(el), []);
+  return [file]
+    .concat(
+      files
+        .list(file.nodeId)
+        .map((e) => (e.isDir ? selfAndChildren(e, files) : e))
+    )
+    .reduce((arr, el) => arr.concat(el), []);
 }
 function getShares(shareKeys: Files["shareKeys"], node: Schema$File) {
   const handle = node.nodeId;
@@ -705,9 +714,7 @@ function getShares(shareKeys: Files["shareKeys"], node: Schema$File) {
     shares.push(handle);
   }
 
-  return parent ?
-    shares.concat(getShares(shareKeys, parent as any)) :
-    shares;
+  return parent ? shares.concat(getShares(shareKeys, parent as any)) : shares;
 }
 function makeCryptoRequest(files: Files, sources: any, shares?: string[]) {
   const shareKeys = files.shareKeys;
@@ -715,7 +722,6 @@ function makeCryptoRequest(files: Files, sources: any, shares?: string[]) {
   if (!Array.isArray(sources)) {
     sources = selfAndChildren(sources, files);
   }
-
 
   console.log(files.shareKeys);
 
@@ -725,18 +731,14 @@ function makeCryptoRequest(files: Files, sources: any, shares?: string[]) {
       .reduce((arr, el) => arr.concat(el))
       .filter((el, index, arr) => index === arr.indexOf(el));
   }
-  const cryptoRequest = [
-    shares,
-    sources.map((node) => node.nodeId),
-    [],
-  ];
+  const cryptoRequest = [shares, sources.map((node) => node.nodeId), []];
 
   // TODO: optimize - keep track of pre-existing/sent keys, only send new ones
-  for (let i = shares.length; i--;) {
+  for (let i = shares.length; i--; ) {
     const aes = new AES(shareKeys[shares[i]]);
     console.log(shareKeys[shares[i]]);
 
-    for (let j = sources.length; j--;) {
+    for (let j = sources.length; j--; ) {
       console.log(sources[j]);
       const fileKey = Buffer.from(sources[j].key);
 

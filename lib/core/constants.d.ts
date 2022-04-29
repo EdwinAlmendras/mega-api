@@ -18,4 +18,6 @@ export declare const ERRORS: {
     17: string;
     18: string;
 };
+export declare const RSA_PRIVK_LENGTH = 43;
+export declare const PATH_SESSION: string;
 export declare const API_GATEWAY_URL = "https://eu.api.mega.co.nz/";

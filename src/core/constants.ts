@@ -1,5 +1,7 @@
 /* eslint-disable max-len */
 
+import path from "path";
+
 export const ERRORS = {
   1: "EINTERNAL (-1): An internal error has occurred. Please submit a bug report, detailing the exact circumstances in which this error occurred.",
   2: "EARGS (-2): You have passed invalid arguments to this command.",
@@ -22,5 +24,8 @@ export const ERRORS = {
   18: "ETEMPUNAVAIL (-18): Resource temporarily not available, please try again later",
 };
 
+export const RSA_PRIVK_LENGTH = 43;
+
+export const PATH_SESSION = path.resolve("./session.json")
 
 export const API_GATEWAY_URL = "https://eu.api.mega.co.nz/";

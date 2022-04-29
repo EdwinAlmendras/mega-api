@@ -2,6 +2,15 @@
 import { ResponseType, AxiosRequestConfig } from "axios";
 import { PathLike } from "fs";
 export declare type SSL = 0 | 1;
+export interface Params$Get {
+    nodeId?: string;
+    name?: string;
+    parent?: string;
+}
+export interface Params$Update {
+    nodeId: string;
+    properties: any;
+}
 export interface Uplaod$Params {
     path?: PathLike;
     properties?: Schema$Properties;
@@ -15,10 +24,12 @@ export interface OptionsUplaod {
 }
 export interface Params$GetData {
     nodeId: string;
-    responseType?: AxiosRequestConfig["responseType"];
-    options?: {
-        ssl: SSL;
-        config: AxiosRequestConfig;
+    config?: AxiosRequestConfig;
+    useSSL?: boolean;
+    url?: string;
+    range?: {
+        start?: number;
+        end?: number;
     };
 }
 export interface Schema$File {

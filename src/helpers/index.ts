@@ -1,8 +1,11 @@
 const chalk = require("chalk")
 
-export const headersThumbnailRequest = {
+
+const USER_AGENT_THUMBNIAL_REQUEST = "Mozilla/ 5.0(Linux; Android 10; SM - M115F) AppleWebKit / 537.36(KHTML, like Gecko) Chrome / 88.0.4324.152 Mobile Safari / 537.36"
+
+const requestThummbnail = {
   "Origin": "https://mega.nz",
-  "User-Agent": "Mozilla/ 5.0(Linux; Android 10; SM - M115F) AppleWebKit / 537.36(KHTML, like Gecko) Chrome / 88.0.4324.152 Mobile Safari / 537.36",
+  "User-Agent": USER_AGENT_THUMBNIAL_REQUEST,
   "Accept": "*/*",
   "Referer": "https://mega.nz/",
   "Accept-Encoding": "gzip, deflate, br",
@@ -15,6 +18,10 @@ export const headersThumbnailRequest = {
   "Sec-Fetch-Mode": "cors",
   "Sec-Fetch-Site": "cross-site",
   "Content-Type": "application/octet-stream",
+}
+
+export const headers = {
+  requestThummbnail,
 }
 
 export const log = {

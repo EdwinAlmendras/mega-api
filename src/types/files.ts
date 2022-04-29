@@ -3,11 +3,21 @@ import { PathLike } from "fs";
 
 export type SSL = 0 | 1;
 
+export interface Params$Get {
+  nodeId?: string;
+  name?: string;
+  parent?: string;
+}
+
+export interface Params$Update {
+  nodeId: string;
+  properties: any;
+}
 export interface Uplaod$Params {
-  path?: PathLike,
-  properties?: Schema$Properties,
+  path?: PathLike;
+  properties?: Schema$Properties;
   url?: string;
-  options?: OptionsUplaod
+  options?: OptionsUplaod;
 }
 
 export interface OptionsUplaod {
@@ -16,11 +26,15 @@ export interface OptionsUplaod {
   key: Buffer;
 }
 export interface Params$GetData {
-   nodeId: string;
-   responseType?: AxiosRequestConfig["responseType"];
-   options?: { ssl: SSL,
-   config: AxiosRequestConfig }
+  nodeId: string;
+  config?: AxiosRequestConfig;
+  useSSL?: boolean;
+  url?: string;
+  range?: {
+    start?: number;
+    end?: number;
   }
+}
 export interface Schema$File {
   nodeId?: string;
   name?: string;
@@ -35,7 +49,7 @@ export interface Schema$File {
   downloadId?: string;
   shareKey?: string;
   key?: Buffer;
-  properties?: Schema$Properties
+  properties?: Schema$Properties;
 }
 
 export interface Schema$Properties {
@@ -50,19 +64,19 @@ export interface Schema$Properties {
     url?: string;
     account?: {
       email?: string;
-      password?: string
-    }
-  }
+      password?: string;
+    };
+  };
   posterUrl?: string;
   stars?: string;
   videoMediaMetadata?: {
     width: number;
     heigth: number;
-  },
+  };
   tags?: string[];
   girl?: {
     name?: string;
-    studios?: string[]
+    studios?: string[];
   };
 }
 export interface Options$LoadMetadata {
@@ -74,11 +88,10 @@ export interface Options$LoadMetadata {
   k: string; // Base64 encryptrd key thats encrypted file
 }
 
-
 export interface Params$Get {
   nodeId?: string;
   name?: string;
   parent?: string;
-  responseType?: ResponseType
-  config?: AxiosRequestConfig
+  responseType?: ResponseType;
+  config?: AxiosRequestConfig;
 }

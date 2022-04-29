@@ -11,7 +11,8 @@ export declare class MegaAccount extends EventEmitter {
         password: typeof changePassword;
     };
     constructor(client: MegaClient);
-    login({ email, password, fetch }: Account.Params$Login): Promise<boolean>;
+    login({ email, password, fetch, saveSession }: Account.Params$Login): Promise<boolean>;
+    resumeSession(): Promise<void>;
     private _loginGetHashAndPasswordKey;
     anonymous(): Promise<void>;
     data(): Promise<{

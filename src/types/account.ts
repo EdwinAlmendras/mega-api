@@ -1,5 +1,6 @@
 export interface Params$Login {
     email: string;
     password: string;
-    fetch?: boolean
+    fetch?: boolean;
+    saveSession?: boolean;
 }

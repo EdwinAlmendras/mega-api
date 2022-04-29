@@ -61,12 +61,10 @@ export class MegaDecrypt extends Transform {
   ctr: CTR;
   constructor({key}) {
     super();
-    console.log(key, "kedecrypty");
     this.aes = getCipher(key);
     this.ctr = new CTR(this.aes, key.slice(16), 0);
   }
   _transform(chunk: Buffer, encoding: string, cb: () => void): void {
-    console.log(chunk);
     this.push(this.ctr.decrypt(chunk));
     cb();
   }
