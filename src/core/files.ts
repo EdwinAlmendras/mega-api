@@ -228,7 +228,7 @@ console.log("findish")
     useSSL,
     range,
     url,
-  }: Params$GetData): Promise<AxiosResponse["data"]> {
+  }: Params$GetData): Promise<{ data: AxiosResponse["data"], url: string}> {
     const file = this.get({ nodeId });
     const defaultConfigAxios: AxiosRequestConfig = { responseType: "stream" };
     const configAxios = config || defaultConfigAxios;
