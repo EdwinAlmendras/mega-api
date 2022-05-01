@@ -1,10 +1,5 @@
 import { randomBytes } from "crypto";
-import {
-  GenericObject,
-  Schema$File,
-  Schema$Properties,
-  Params$GetData,
-} from "../types";
+import { GenericObject, Schema$File, Schema$Properties, Params$GetData } from "../types";
 import * as Types from "../types";
 import { MegaClient } from "./";
 import Properties from "./properties";
@@ -14,14 +9,9 @@ import { v4 } from "uuid";
 import { uniq } from "lodash";
 import EventEmitter from "events";
 import { MegaApiClient } from "./api";
-import {
-  base64,
-  AES,
-  getCipher,
-  createDecrypterStream,
-  constantTimeCompare,
-} from "../crypto";
+import { base64, AES, getCipher, createDecrypterStream, constantTimeCompare, megaDecrypt } from "../crypto";
 import { headers } from "../helpers";
+import { createWriteStream } from "fs";
 
 const KEY_CACHE = {};
 const TYPE_FILE_DATA = ["file", "thumbnail", "preview"];
@@ -38,7 +28,7 @@ export default class Files extends EventEmitter {
     root: string;
     trash: string;
     inbox: string;
-  } = { root: "", trash: "", inbox: ""};
+  } = { root: "", trash: "", inbox: "" };
   public shareKeys: GenericObject; // { BUffer}
   public data: Schema$File[] = [];
   private KEY_AES: AES;
@@ -65,23 +55,18 @@ export default class Files extends EventEmitter {
 
     this.shareKeys = response.ok.reduce((shares, share) => {
       const handler = share.h;
-      const auth = this.client.state.KEY_AES.encrypt.ecb(
-        Buffer.from(handler + handler, "utf8")
-      );
+      const auth = this.client.state.KEY_AES.encrypt.ecb(Buffer.from(handler + handler, "utf8"));
       // console.log(share, auth, handler);
       if (constantTimeCompare(base64.decrypt(share.ha), auth)) {
-        shares[handler] = this.client.state.KEY_AES.decrypt.ecb(
-          base64.decrypt(share.k)
-        );
+        shares[handler] = this.client.state.KEY_AES.decrypt.ecb(base64.decrypt(share.k));
       }
       return shares;
     }, {});
 
     for await (const file of f) {
       this.compose(file);
-    
     }
-console.log("findish")
+    console.log("findish");
     return Promise.resolve(this.data);
   }
 
@@ -114,8 +99,7 @@ console.log("findish")
           break;
       }
       this.data.push(file);
-      return file
-      
+      return file;
     }
   }
 
@@ -186,9 +170,7 @@ console.log("findish")
 
     const parts = file.k.split(":");
     const key = base64.decrypt(parts[parts.length - 1]);
-    metadata.key = aes
-      ? aes.decrypt.ecb(key)
-      : this.client.state.KEY_AES.decrypt.ecb(key);
+    metadata.key = aes ? aes.decrypt.ecb(key) : this.client.state.KEY_AES.decrypt.ecb(key);
     if (file.a) {
       const properties = Properties.decrypt(file.a, key);
       metadata = {
@@ -222,20 +204,14 @@ console.log("findish")
    * @param {Object}
    * @returns {AxiosResponse["data"]}
    */
-  public async getSource({
-    nodeId,
-    config,
-    useSSL,
-    range,
-    url,
-  }: Params$GetData): Promise<{ data: AxiosResponse["data"], url: string}> {
+  public async getSource({ nodeId, config, useSSL, range, url }: Params$GetData): Promise<{ data: AxiosResponse["data"]; url: string }> {
     const file = this.get({ nodeId });
     const defaultConfigAxios: AxiosRequestConfig = { responseType: "stream" };
     const configAxios = config || defaultConfigAxios;
 
     let downloadUrl = url;
     if (!url) {
-      console.log("dont found url")
+      console.log("dont found url");
       // Made request of the file
       const response = await this.api.request({
         a: "g",
@@ -249,62 +225,49 @@ console.log("findish")
     const startRange = range?.start || 0;
     const endRange = range?.end || String(file.size);
     const urlRange = `${downloadUrl}/${startRange}-${endRange}`;
-
-    let response: AxiosResponse;
-
-    try {
-      response = await this.api.axios.get(urlRange, configAxios);
-    } catch (error) {
-      return Promise.reject(error);
-    }
+    const { data, status, headers } = await this.api.axios.get(urlRange, { responseType: "stream"});
 
     if (configAxios.responseType === "stream") {
-      const stream = new PassThrough();
-
+      const decryptStream = megaDecrypt(file.key)
       const descrypter = createDecrypterStream(file.key);
+      data.pipe(descrypter);
 
-      response.data.pipe(descrypter).pipe(stream);
-
-      return Promise.resolve({ data: response.data, url: downloadUrl});
+      return Promise.resolve({ data: descrypter, url: downloadUrl });
     } else {
       // TODO PENDIG DECRUPTING BUFFER OR ANY OTHER DATA
 
-      return Promise.resolve({ data: response.data, url: downloadUrl});
+      return Promise.resolve({ data, url: downloadUrl });
     }
   }
 
-  public async getThumbs({
-    nodes,
-    previewType,
-  }): Promise<{ nodeId: string; data: Buffer }[]> {
+  public async getThumbs({ nodes, previewType }): Promise<{ nodeId: string; data: Buffer }[]> {
     const previewTypes = {
       thumbnail: 1,
       preview: 0,
     };
 
-    const getThumbsIds = (file): [string, string] =>
-      file.thumbs.split("/")[1].split("*");
+    const getThumbsIds = (file): [string, string] => file.thumbs.split("/")[1].split("*");
 
     const files = nodes.map((nodeId) => this.get({ nodeId }));
     const type = previewTypes[previewType];
 
     const requestData = files.map((file) => {
-      console.log(getThumbsIds(file))
+      console.log(getThumbsIds(file));
       return {
         a: "ufa",
-        fah: (getThumbsIds(file))[1],
+        fah: getThumbsIds(file)[1],
         r: 1,
         ssl: 0,
       };
     });
 
-    console.log(requestData)
+    console.log(requestData);
     const response = await this.api.custom({ data: requestData });
 
     let thumbs = [];
 
     for await (const [index, item] of response.entries()) {
-      console.log(item)
+      console.log(item);
       const url = `${item.p}/${type}`;
       const file = files[index];
       const hash = base64.decrypt(getThumbsIds(file)[1]);
@@ -373,13 +336,7 @@ console.log("findish")
    * @param {Object}
    * @returns {Schema$File[]}
    */
-  public list({
-    folderId,
-    onlyFolders,
-  }: {
-    folderId?: string;
-    onlyFolders?: boolean;
-  }): Schema$File[] {
+  public list({ folderId, onlyFolders }: { folderId?: string; onlyFolders?: boolean }): Schema$File[] {
     // eslint-disable-next-line require-jsdoc
     function filterReducer(file) {
       if (onlyFolders) {
@@ -408,19 +365,11 @@ console.log("findish")
    * @param {Object} options
    * @returns {Promise}
    */
-  public makedir(options: {
-    name: string;
-    parent: string;
-    parentName?: string;
-    properties?: Schema$Properties;
-  }): Promise<Schema$File> {
+  public makedir(options: { name: string; parent: string; parentName?: string; properties?: Schema$Properties }): Promise<Schema$File> {
     return new Promise(async (resolve) => {
       const { name, parent, parentName, properties } = options;
 
-      const t: string =
-        parent ||
-        (await this.get({ name: parentName })).parent ||
-        this.client.state.ID_ROOT_FOLDER;
+      const t: string = parent || (await this.get({ name: parentName })).parent || this.client.state.ID_ROOT_FOLDER;
       const key = randomBytes(16);
       const node = [
         {
@@ -454,13 +403,7 @@ console.log("findish")
    * @param {Object}
    * @returns {void}
    */
-  public rdir({
-    path,
-    parent,
-  }: {
-    path?: string;
-    parent?: string;
-  }): Promise<void> {
+  public rdir({ path, parent }: { path?: string; parent?: string }): Promise<void> {
     return new Promise(async (resolve) => {
       const dirs = path.split("/");
       if (!parent) parent = this.client.state.ID_ROOT_FOLDER;
@@ -519,13 +462,7 @@ console.log("findish")
    * @param {Object} params
    * @returns {Promise}
    */
-  public async delete({
-    nodeId,
-    permanent,
-  }: {
-    nodeId: string;
-    permanent?: boolean;
-  }): Promise<void> {
+  public async delete({ nodeId, permanent }: { nodeId: string; permanent?: boolean }): Promise<void> {
     if (permanent) {
       try {
         await this.api.request({
@@ -548,13 +485,7 @@ console.log("findish")
     }
   }
   // OK
-  public move({
-    nodeId,
-    target,
-  }: {
-    nodeId: string;
-    target: string;
-  }): Promise<void> {
+  public move({ nodeId, target }: { nodeId: string; target: string }): Promise<void> {
     return new Promise(async (resolve, reject) => {
       try {
         await this.api.request({
@@ -615,9 +546,7 @@ console.log("findish")
             },
           ],
           ok: base64.encrypt(this.KEY_AES.encrypt.ecb(Buffer.from(shareKey))),
-          ha: base64.encrypt(
-            this.KEY_AES.encrypt.ecb(Buffer.from(file.nodeId + file.nodeId))
-          ),
+          ha: base64.encrypt(this.KEY_AES.encrypt.ecb(Buffer.from(file.nodeId + file.nodeId))),
           cr,
         };
 
@@ -628,20 +557,14 @@ console.log("findish")
         n: file.nodeId,
       });
 
-      const url = `https://mega.nz/${
-        file.isDir ? "folder" : "file"
-      }/${id}#${base64.encrypt(shareKey || file.key)}`;
+      const url = `https://mega.nz/${file.isDir ? "folder" : "file"}/${id}#${base64.encrypt(shareKey || file.key)}`;
       return Promise.resolve(url);
     } catch (error) {
       Promise.reject(error);
     }
   }
 
-  async loadAttributes({
-    isDir,
-    downloadId,
-    key,
-  }: GenericObject): Promise<GenericObject> {
+  async loadAttributes({ isDir, downloadId, key }: GenericObject): Promise<GenericObject> {
     return new Promise(async (resolve) => {
       const req = isDir
         ? {
@@ -663,9 +586,7 @@ console.log("findish")
       });
       if (isDir) {
         const nodes = response[0].f;
-        const rootFolder = nodes.find(
-          (node) => node.k && node.h === node.k.split(":")[0]
-        );
+        const rootFolder = nodes.find((node) => node.k && node.h === node.k.split(":")[0]);
         const aes = key ? new AES(key) : null;
         const folder = await Properties.loadMetadata(rootFolder, aes);
         const filesSource: Schema$File[] = [
@@ -697,13 +618,7 @@ console.log("findish")
 
 function selfAndChildren(file, files) {
   // eslint-disable-next-line max-len
-  return [file]
-    .concat(
-      files
-        .list(file.nodeId)
-        .map((e) => (e.isDir ? selfAndChildren(e, files) : e))
-    )
-    .reduce((arr, el) => arr.concat(el), []);
+  return [file].concat(files.list(file.nodeId).map((e) => (e.isDir ? selfAndChildren(e, files) : e))).reduce((arr, el) => arr.concat(el), []);
 }
 function getShares(shareKeys: Files["shareKeys"], node: Schema$File) {
   const handle = node.nodeId;

@@ -50,11 +50,11 @@ export default class Files extends EventEmitter {
      * @param {Object}
      * @returns {AxiosResponse["data"]}
      */
-    getSource({ nodeId, config, useSSL, range, url, }: Params$GetData): Promise<{
+    getSource({ nodeId, config, useSSL, range, url }: Params$GetData): Promise<{
         data: AxiosResponse["data"];
         url: string;
     }>;
-    getThumbs({ nodes, previewType, }: {
+    getThumbs({ nodes, previewType }: {
         nodes: any;
         previewType: any;
     }): Promise<{
@@ -74,7 +74,7 @@ export default class Files extends EventEmitter {
      * @param {Object}
      * @returns {Schema$File[]}
      */
-    list({ folderId, onlyFolders, }: {
+    list({ folderId, onlyFolders }: {
         folderId?: string;
         onlyFolders?: boolean;
     }): Schema$File[];
@@ -98,7 +98,7 @@ export default class Files extends EventEmitter {
      * @param {Object}
      * @returns {void}
      */
-    rdir({ path, parent, }: {
+    rdir({ path, parent }: {
         path?: string;
         parent?: string;
     }): Promise<void>;
@@ -110,11 +110,11 @@ export default class Files extends EventEmitter {
      * @param {Object} params
      * @returns {Promise}
      */
-    delete({ nodeId, permanent, }: {
+    delete({ nodeId, permanent }: {
         nodeId: string;
         permanent?: boolean;
     }): Promise<void>;
-    move({ nodeId, target, }: {
+    move({ nodeId, target }: {
         nodeId: string;
         target: string;
     }): Promise<void>;
@@ -127,5 +127,5 @@ export default class Files extends EventEmitter {
     export({ nodeId }: {
         nodeId: string;
     }): Promise<string>;
-    loadAttributes({ isDir, downloadId, key, }: GenericObject): Promise<GenericObject>;
+    loadAttributes({ isDir, downloadId, key }: GenericObject): Promise<GenericObject>;
 }

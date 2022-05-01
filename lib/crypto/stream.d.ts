@@ -29,3 +29,7 @@ export declare class MegaDecrypt extends Transform {
     });
     _transform(chunk: Buffer, encoding: string, cb: () => void): void;
 }
+export declare function megaDecrypt(key: any, options?: {
+    disableVerification: boolean;
+    start: number;
+}): Transform;

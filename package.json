@@ -25,6 +25,7 @@
     "pastebin-js": "^1.0.6",
     "promise-fs": "^2.1.1",
     "pump": "^3.0.0",
+    "pumpify": "^2.0.1",
     "socks-proxy-agent": "^5.0.0",
     "tiktok-scraper": "^1.4.22",
     "uuid": "^8.3.2",

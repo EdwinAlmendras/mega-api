@@ -14,20 +14,20 @@ async function main() {
  */
     await client.account.resumeSession();
     client.api.on("request", (data) => console.log(data));
-    const file = client.files.get({ name: "ZPUAPFEFOBFSBFU6GS2MCJVJLY.jpg" });
+    const filename = "01.mp4"
+    const file = client.files.get({ name: filename});
 
-    const [resp] = await client.files.getThumbs({ nodes: [file.nodeId], previewType: "preview"})
-
+   /*  const [resp] = await client.files.getThumbs({ nodes: [file.nodeId], previewType: "preview"})
+ */
    // const buffer = await client.files.getThumbnail({ nodeId: file.nodeId })
 
-    writeFileSync("ok.jpg", resp.data)
-    /* 
-    const stream = await client.files.getSource({
+   /*  writeFileSync("ok.jpg", resp.data)
+     */
+    const { data } = await client.files.getSource({
       nodeId: file.nodeId,
     });
-    const w = createWriteStream("ZPUAPFEFOBFSBFU6GS2MCJVJLY.jpg");
-    stream.pipe(w);
- */
+    const w = createWriteStream(filename);
+    data.pipe(w);
     // eslint-disable-next-line max-len
     // console.log(client.files.list({ folderId: client.state.ID_ROOT_FOLDER}).map(e => e.nodeId))
     // await client.files.getThumbnail({ nodeId: client.files.get({ name: "ZPUAPFEFOBFSBFU6GS2MCJVJLY.jpg"}).nodeId });
