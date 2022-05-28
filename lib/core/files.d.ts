@@ -78,6 +78,7 @@ export default class Files extends EventEmitter {
         folderId?: string;
         onlyFolders?: boolean;
     }): Schema$File[];
+    getAbsolutePathByName(name: string): string;
     getByPath({ path }: {
         path: string;
     }): Promise<Schema$File>;

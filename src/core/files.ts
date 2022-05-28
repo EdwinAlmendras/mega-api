@@ -348,6 +348,31 @@ export default class Files extends EventEmitter {
     return this.data.filter(filterReducer);
   }
 
+  public getAbsolutePathByName(name: string): string {
+    const file = this.get({ name });
+    if(!file) throw new Error("File not found");
+    const folder = file.parent 
+    const filename = name
+
+    const self = this
+    function checkIfExistsParentAndAppendToPath(path, parent) {
+      // gets parent node
+      const parentFolder = self.get({ nodeId: parent });
+      // check if parent exists
+      if(parentFolder.parent) {
+        const newPath = parentFolder.properties.name + "/" + path;
+        if(parentFolder.parent === self.client.state.ID_ROOT_FOLDER){
+          return newPath
+        } 
+        const absolutePath = checkIfExistsParentAndAppendToPath(newPath, parentFolder.parent)
+        return (absolutePath)
+      }
+      return parentFolder?.properties?.name + "/" + path;
+    }
+    const absolutePath = checkIfExistsParentAndAppendToPath(filename, folder)
+    return absolutePath
+  }
+
   public getByPath({ path }: { path: string }): Promise<Schema$File> {
     // PATH LIKE personal/2019/fabruary
     const routes = path.split("/");
