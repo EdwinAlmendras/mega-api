@@ -1,4 +1,10 @@
 /// <reference types="node" />
+export declare class MAC {
+    constructor(aes: any, nonce: any);
+    condense(): Buffer;
+    update(buffer: any): void;
+    checkBounding(): void;
+}
 export declare class AES$Encrypt {
     key: any;
     constructor(key?: any);
@@ -13,6 +19,7 @@ export declare class AES$Decrypt {
     ecb(buffer: Buffer): Buffer;
 }
 export declare class AES {
+    encryptCBC(at: any): void;
     encrypt: AES$Encrypt;
     decrypt: AES$Decrypt;
     key: Buffer;

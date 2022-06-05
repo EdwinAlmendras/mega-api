@@ -4,12 +4,12 @@ import { AES, CTR } from "./";
 /**
  *
  * @param {Buffer} key its buffer
- * @param {Object} param1 sdasd
  * @return encrypter
  */
-export declare function createEncrypterStream(key: Buffer, { start }: {
+export declare function createEncrypterStream(key: Buffer, start?: number): MegaEncrypt;
+export declare function megaEncrypt(key: any, { start }?: {
     start?: number;
-}): MegaEncrypt;
+}): any;
 export declare class MegaEncrypt extends Transform {
     aes: AES;
     ctr: CTR;
@@ -20,7 +20,6 @@ export declare class MegaEncrypt extends Transform {
     });
     _transform(chunk: Buffer, encoding: string, cb: () => void): void;
 }
-export declare function createDecrypterStream(key: Buffer): MegaDecrypt;
 export declare class MegaDecrypt extends Transform {
     aes: AES;
     ctr: CTR;
@@ -29,6 +28,7 @@ export declare class MegaDecrypt extends Transform {
     });
     _transform(chunk: Buffer, encoding: string, cb: () => void): void;
 }
+export declare function createDecrypterStream(key: Buffer): MegaDecrypt;
 export declare function megaDecrypt(key: any, options?: {
     disableVerification: boolean;
     start: number;

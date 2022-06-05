@@ -896,7 +896,6 @@ class Uploader extends EventEmitter {
     const chunkPosition = this.position;
     const chunkBuffer = this.uploadBuffer;
     async function trySendChunk() {
-      tries++;
       const endpoint = this.type === 0 ? chunkPosition : --this.type;
       const { data: hashBuffer } = await axios.post(`${this.url}/${endpoint}`, chunkBuffer, { responseType: "arraybuffer" });
 

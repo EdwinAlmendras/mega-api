@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { ResponseType, AxiosRequestConfig } from "axios";
-import { PathLike } from "fs";
+import { Readable } from "stream";
 export declare type SSL = 0 | 1;
 export interface Params$Get {
     nodeId?: string;
@@ -12,9 +12,9 @@ export interface Params$Update {
     properties: any;
 }
 export interface Uplaod$Params {
-    path?: PathLike;
+    stream: Readable;
+    size: number;
     properties?: Schema$Properties;
-    url?: string;
     options?: OptionsUplaod;
 }
 export interface OptionsUplaod {

@@ -14,6 +14,7 @@ export default class Properties {
     static decrypt(attrsEnc: string, key: Buffer): Schema$Properties;
     static parse(attrs: any): Schema$Properties;
     static unpack(attrs: Buffer): JSON | Error;
+    static encrypt(properties: GenericObject, key: Buffer): Buffer;
     static unparse(attrs: Schema$Properties): GenericObject;
     /**
      * Compacts a object unparsed { n: "awsome.pdf", label: "green"} to --> "MEGA{"name":"awesome.pdf"...}" --> Buffer

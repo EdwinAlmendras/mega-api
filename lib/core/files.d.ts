@@ -4,6 +4,7 @@ import * as Types from "../types";
 import { MegaClient } from "./";
 import { AxiosResponse } from "axios";
 import EventEmitter from "events";
+import { SSL } from "types";
 /**
  * Main class files for every purpose file
  */
@@ -18,7 +19,9 @@ export default class Files extends EventEmitter {
     data: Schema$File[];
     private KEY_AES;
     private api;
+    storage: any;
     constructor(client: MegaClient);
+    static defaultHandleRetries(tries: any, error: any, cb: any): void;
     fetch(): Promise<Schema$File[]>;
     /**
      * Compose - compons file decrypting and mounting in this.data object
@@ -54,13 +57,14 @@ export default class Files extends EventEmitter {
         data: AxiosResponse["data"];
         url: string;
     }>;
-    getThumbs({ nodes, previewType }: {
-        nodes: any;
-        previewType: any;
-    }): Promise<{
-        nodeId: string;
-        data: Buffer;
-    }[]>;
+    upload({ properties, size, target, source, options }: any): Promise<Schema$File>;
+    _uploadInternal({ stream, size, source, type, options }: {
+        stream: any;
+        size: any;
+        source: any;
+        type: any;
+        options: any;
+    }): Promise<void>;
     /**
      * Get the thumbnail buffer
      * @param {nodeId} node Id handle file
@@ -129,4 +133,20 @@ export default class Files extends EventEmitter {
         nodeId: string;
     }): Promise<string>;
     loadAttributes({ isDir, downloadId, key }: GenericObject): Promise<GenericObject>;
+}
+export declare type Action$RequestUrl = "u" | "ufa";
+export declare type VersionAccount = 1 | 2;
+export interface RequestUrlFile {
+    a: Action$RequestUrl;
+    ssl: SSL;
+    s: number;
+    ms: number;
+    r: number;
+    e: number;
+    v: VersionAccount;
+}
+export interface RequestUrlThumbs {
+    a: Action$RequestUrl;
+    ssl: SSL;
+    s: number;
 }
