@@ -4,17 +4,25 @@ import * as Types from "../types";
 import { MegaClient } from "./";
 import Properties from "./properties";
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
-import { PassThrough } from "stream";
-import { v4 } from "uuid";
-import { uniq } from "lodash";
 import EventEmitter from "events";
 import { MegaApiClient } from "./api";
-import { base64, AES, getCipher, createDecrypterStream, constantTimeCompare, megaDecrypt } from "../crypto";
+import { base64, createEncrypterStream, getCipher, createDecrypterStream, constantTimeCompare, megaDecrypt, AES, MegaEncrypt, megaEncrypt } from "../crypto";
 import { headers } from "../helpers";
-import { createWriteStream } from "fs";
-
 const KEY_CACHE = {};
-const TYPE_FILE_DATA = ["file", "thumbnail", "preview"];
+import { cloneDeep } from "lodash"
+type UploadTypes = "file" | "thumbnail" | "preview";
+const TYPE_FILE_DATA = ["file", "thumbnail", "preview"] as const;
+const getTypeUpload = (type: UploadTypes) => TYPE_FILE_DATA.indexOf(type);
+import crypto from "crypto";
+import { Transform, Writable, WritableOptions } from "stream";
+import { SSL, Uplaod$Params } from "types";
+import { ERRORS } from "./constants";
+import { createWriteStream } from "fs";
+const KEY_SAFE_LENGHT = 24;
+import secureRandom from "secure-random";
+//type SSL = 2 | 0;
+
+
 const FOLDERS = {
   ROOT: 2,
   TRASH: 3,
@@ -33,10 +41,18 @@ export default class Files extends EventEmitter {
   public data: Schema$File[] = [];
   private KEY_AES: AES;
   private api: MegaApiClient;
+  storage: any;
   constructor(protected client: MegaClient) {
     super();
     this.KEY_AES = this.client.state.KEY_AES;
     this.api = this.client.api;
+  }
+  static defaultHandleRetries(tries, error, cb) {
+    if (tries > 8) {
+      cb(error);
+    } else {
+      setTimeout(cb, 1000 * Math.pow(2, tries));
+    }
   }
   public async fetch(): Promise<Schema$File[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,7 +82,6 @@ export default class Files extends EventEmitter {
     for await (const file of f) {
       this.compose(file);
     }
-    console.log("findish");
     return Promise.resolve(this.data);
   }
 
@@ -225,10 +240,10 @@ export default class Files extends EventEmitter {
     const startRange = range?.start || 0;
     const endRange = range?.end || String(file.size);
     const urlRange = `${downloadUrl}/${startRange}-${endRange}`;
-    const { data, status, headers } = await this.api.axios.get(urlRange, { responseType: "stream"});
+    const { data, status, headers } = await this.api.axios.get(urlRange, { responseType: "stream" });
 
     if (configAxios.responseType === "stream") {
-      const decryptStream = megaDecrypt(file.key)
+      const decryptStream = megaDecrypt(file.key);
       const descrypter = createDecrypterStream(file.key);
       data.pipe(descrypter);
 
@@ -240,56 +255,158 @@ export default class Files extends EventEmitter {
     }
   }
 
-  public async getThumbs({ nodes, previewType }): Promise<{ nodeId: string; data: Buffer }[]> {
-    const previewTypes = {
-      thumbnail: 1,
-      preview: 0,
+  async upload({ properties, size, target, source, options}: any) {
+    if(target === "root" || !target ) target = this.client.state.ID_ROOT_FOLDER
+    let finalKey;
+    const key = secureRandom(24);
+    const type = 0;
+    const hashes = [];
+    const encrypter = megaEncrypt(key);
+    let stream = encrypter;
+    source.pipe(stream);
+    this._uploadInternal({ stream, size, source: encrypter, type, options });
+    const hash = await new Promise((resolve) => encrypter.on("hash", (j) => resolve(j)));
+    // getting hash
+    hashes[type] = hash;
+    if (type === 0 && !finalKey) finalKey = encrypter.key;
+
+    const unparsed = Properties.unparse(properties);
+    const packed = Properties.pack(unparsed);
+    getCipher(finalKey).encrypt.cbc(packed);
+
+    const storedKey = Buffer.from(finalKey);
+    this.client.state.KEY_AES.encrypt.ecb(storedKey);
+
+
+
+    const fileObject: any = {
+      h: base64.encrypt(hashes[0]),
+      t: 0,
+      a: base64.encrypt(packed),
+      k: base64.encrypt(storedKey),
     };
 
-    const getThumbsIds = (file): [string, string] => file.thumbs.split("/")[1].split("*");
-
-    const files = nodes.map((nodeId) => this.get({ nodeId }));
-    const type = previewTypes[previewType];
-
-    const requestData = files.map((file) => {
-      console.log(getThumbsIds(file));
-      return {
-        a: "ufa",
-        fah: getThumbsIds(file)[1],
-        r: 1,
-        ssl: 0,
-      };
-    });
-
-    console.log(requestData);
-    const response = await this.api.custom({ data: requestData });
-
-    let thumbs = [];
-
-    for await (const [index, item] of response.entries()) {
-      console.log(item);
-      const url = `${item.p}/${type}`;
-      const file = files[index];
-      const hash = base64.decrypt(getThumbsIds(file)[1]);
-
-      const { data } = await axios({
-        url,
-        method: "POST",
-        data: hash,
-        responseType: "arraybuffer",
-        headers: headers.requestThummbnail,
-      });
-
-      const aes = getCipher(file.key);
-      const dataNormalized = data.slice(12, data.length);
-      const bufferThumb = aes.decrypt.cbc(dataNormalized);
-      thumbs.push({
-        nodeId: file.nodeId,
-        data: bufferThumb,
-      });
+    if (hashes.length !== 1) {
+      fileObject.fa = hashes
+        .slice(1)
+        .map((hash, index) => {
+          return index + "*" + base64.encrypt(hash);
+        })
+        .filter((e) => e)
+        .join("/");
     }
 
-    return Promise.resolve(thumbs);
+    const request = {
+      a: "p",
+      t: target,
+      n: [fileObject],
+    };
+
+    const response = await this.api.request(request);
+    const file = this.compose(response.f[0]);
+    this.emit("add", file);
+    stream.emit("complete", file);
+    return file;
+  }
+  async _uploadInternal({ stream, size, source, type, options }) {
+    const getUrlRequest = { a: "u", ssl: 0, s: size, ms: 0, r: 0, e: 0, v: 2 };
+    const initialChunkSize = type === 0 ? options?.initialChunkSize || 128 * 1024 : size;
+    const chunkSizeIncrement = options?.chunkSizeIncrement || 128 * 1024;
+    const maxChunkSize = options?.maxChunkSize || 1024 * 1024;
+    const maxConnections = options?.maxConnections || 4;
+    let currentChunkSize = initialChunkSize;
+    let activeConnections = 0;
+    let isReading = false;
+    let position = 0;
+    let remainingBuffer;
+    let uploadBuffer, uploadURL;
+    let chunkSize, chunkPos;
+    let sizeCheck = 0;
+
+    const resp = await this.api.request(getUrlRequest);
+    uploadURL = resp.p;
+    handleChunk();
+
+    function handleChunk() {
+      chunkSize = Math.min(currentChunkSize, size - position);
+      uploadBuffer = Buffer.alloc(chunkSize);
+      activeConnections++;
+
+      if (currentChunkSize < maxChunkSize) {
+        currentChunkSize += chunkSizeIncrement;
+      }
+
+      chunkPos = 0;
+      if (remainingBuffer) {
+        remainingBuffer.copy(uploadBuffer);
+        chunkPos = Math.min(remainingBuffer.length, chunkSize);
+        remainingBuffer = remainingBuffer.length > chunkSize ? remainingBuffer.slice(chunkSize) : null;
+      }
+
+      // It happens when the remaining buffer contains the entire chunk
+      if (chunkPos === chunkSize) {
+        sendChunk();
+      } else {
+        isReading = true;
+        handleData();
+      }
+    }
+
+    function sendChunk() {
+      const chunkPosition = position;
+      const chunkBuffer = uploadBuffer;
+      let tries = 0;
+
+      const trySendChunk = async () => {
+        tries++;
+        const endpoint = type === 0 ? chunkPosition : --type;
+        const { data: hash } = await axios.post(`${uploadURL}/${endpoint}`, chunkBuffer, { responseType: "arraybuffer" });
+
+        if (hash.length > 0) {
+          source.end();
+          source.emit("hash", hash);
+        } else if (position < size && !isReading) {
+          handleChunk();
+        }
+      };
+      trySendChunk();
+
+      uploadBuffer = null;
+      position += chunkSize;
+
+      if (position < size && !isReading && activeConnections < maxConnections) {
+        handleChunk();
+      }
+    }
+
+    function handleData() {
+      while (true) {
+        const data = source.read();
+        if (data === null) {
+          source.once("readable", handleData);
+          break;
+        }
+        sizeCheck += data.length;
+        stream.emit("progress", { bytesLoaded: sizeCheck, bytesTotal: size });
+
+        data.copy(uploadBuffer, chunkPos);
+        chunkPos += data.length;
+
+        if (chunkPos >= chunkSize) {
+          isReading = false;
+
+          remainingBuffer = data.slice(data.length - (chunkPos - chunkSize));
+          sendChunk();
+          break;
+        }
+      }
+    }
+
+    source.on("end", () => {
+      if (size && sizeCheck !== size) {
+        stream.emit("error", Error("Specified data size does not match: " + size + " !== " + sizeCheck));
+      }
+    });
   }
   /**
    * Get the thumbnail buffer
@@ -350,27 +467,27 @@ export default class Files extends EventEmitter {
 
   public getAbsolutePathByName(name: string): string {
     const file = this.get({ name });
-    if(!file) throw new Error("File not found");
-    const folder = file.parent 
-    const filename = name
+    if (!file) throw new Error("File not found");
+    const folder = file.parent;
+    const filename = name;
 
-    const self = this
+    const self = this;
     function checkIfExistsParentAndAppendToPath(path, parent) {
       // gets parent node
       const parentFolder = self.get({ nodeId: parent });
       // check if parent exists
-      if(parentFolder.parent) {
+      if (parentFolder.parent) {
         const newPath = parentFolder.properties.name + "/" + path;
-        if(parentFolder.parent === self.client.state.ID_ROOT_FOLDER){
-          return newPath
-        } 
-        const absolutePath = checkIfExistsParentAndAppendToPath(newPath, parentFolder.parent)
-        return (absolutePath)
+        if (parentFolder.parent === self.client.state.ID_ROOT_FOLDER) {
+          return newPath;
+        }
+        const absolutePath = checkIfExistsParentAndAppendToPath(newPath, parentFolder.parent);
+        return absolutePath;
       }
       return parentFolder?.properties?.name + "/" + path;
     }
-    const absolutePath = checkIfExistsParentAndAppendToPath(filename, folder)
-    return absolutePath
+    const absolutePath = checkIfExistsParentAndAppendToPath(filename, folder);
+    return absolutePath;
   }
 
   public getByPath({ path }: { path: string }): Promise<Schema$File> {
@@ -663,8 +780,6 @@ function makeCryptoRequest(files: Files, sources: any, shares?: string[]) {
     sources = selfAndChildren(sources, files);
   }
 
-  console.log(files.shareKeys);
-
   if (!shares) {
     shares = sources
       .map((source) => getShares(shareKeys, source))
@@ -695,4 +810,136 @@ function searchByName(data: Schema$File[], name: string): Schema$File {
 }
 function searchByNode(data: Schema$File[], nodeId: string): Schema$File {
   return data.find((e) => nodeId === e.nodeId);
+}
+
+export type Action$RequestUrl = "u" | "ufa";
+export type VersionAccount = 1 | 2;
+export interface RequestUrlFile {
+  a: Action$RequestUrl;
+  ssl: SSL;
+  s: number;
+  ms: number;
+  r: number;
+  e: number;
+  v: VersionAccount;
+}
+export interface RequestUrlThumbs {
+  a: Action$RequestUrl;
+  ssl: SSL;
+  s: number;
+}
+
+
+class Uploader extends EventEmitter {
+  url: any;
+  type: number;
+  size: any;
+  source: any;
+  initialChunkSize: any;
+  chunkSizeIncrement: any;
+  maxChunkSize: any;
+  maxConnections: any;
+  currentChunkSize: any;
+  activeConnections: number;
+  position: number;
+  remainingBuffer: any;
+  uploadBuffer: any;
+  chunkSize: any;
+  chunkPos: number;
+  sizeCheck: number;
+  isReading: boolean;
+  constructor({ source, url, options, size }) {
+    super();
+    this.url = url;
+    this.type = 0;
+    this.size = size;
+    this.source = cloneDeep(source);
+    this.initialChunkSize = 128 * 1024 || options?.initialChunkSize; //type === 0 ? options.initialChunkSize || 128 * 1024 : size;
+    this.chunkSizeIncrement = options?.chunkSizeIncrement || 128 * 1024;
+    this.maxChunkSize = options?.maxChunkSize || 1024 * 1024;
+    this.maxConnections = options?.maxConnections || 4;
+    this.currentChunkSize = this.initialChunkSize;
+    this.activeConnections = 0;
+    this.position = 0;
+    this.remainingBuffer;
+    this.uploadBuffer;
+    this.chunkSize;
+    this.chunkPos = 0;
+    this.sizeCheck = 0;
+  }
+  handleChunk() {
+    this.chunkSize = Math.min(this.currentChunkSize, this.size - this.position);
+    this.uploadBuffer = Buffer.alloc(this.chunkSize);
+    this.activeConnections++;
+
+    if (this.currentChunkSize < this.maxChunkSize) {
+      this.currentChunkSize += this.chunkSizeIncrement;
+    }
+
+    this.chunkPos = 0;
+    if (this.remainingBuffer) {
+      this.remainingBuffer.copy(this.uploadBuffer);
+      this.chunkPos = Math.min(this.remainingBuffer.length, this.chunkSize);
+      this.remainingBuffer = this.remainingBuffer.length > this.chunkSize ? this.remainingBuffer.slice(this.chunkSize) : null;
+    }
+
+    // It happens when the remaining buffer contains the entire chunk
+    if (this.chunkPos === this.chunkSize) {
+      this.sendChunk();
+    } else {
+      this.isReading = true;
+      this.handleData();
+    }
+  }
+
+  sendChunk() {
+    const chunkPosition = this.position;
+    const chunkBuffer = this.uploadBuffer;
+    async function trySendChunk() {
+      tries++;
+      const endpoint = this.type === 0 ? chunkPosition : --this.type;
+      const { data: hashBuffer } = await axios.post(`${this.url}/${endpoint}`, chunkBuffer, { responseType: "arraybuffer" });
+
+      if (hashBuffer.length > 0) {
+        const error = +hashBuffer.toString();
+        if (error < 0) return ("Server returned error " + error + " while uploading");
+        this.source.end();
+        // cb(null, type, hashBuffer, source);
+        this.source.emit("hash", [hashBuffer, this.source.key]);
+        this.emit("uploaded", [hashBuffer, this.source.key]);
+        //return Promise.resolve({ type, hashBuffer, source });
+      } else if (this.position < this.size && !this.isReading) {
+        this.handleChunk();
+      }
+    }
+    trySendChunk.apply(this);
+
+    this.uploadBuffer = null;
+    this.position += this.chunkSize;
+
+    if (this.position < this.size && !this.isReading && this.activeConnections < this.maxConnections) {
+      this.handleChunk();
+    }
+  }
+
+  handleData() {
+    while (true) {
+      const data = this.source.read();
+      if (data === null) {
+        this.source.once("readable", this.handleData);
+        break;
+      }
+      this.sizeCheck += data.length;
+      //stream.emit("progress", { bytesLoaded: this.sizeCheck, bytesTotal: this.size });
+      this.emit("progress", { bytesLoaded: this.sizeCheck, bytesTotal: this.size });
+      data.copy(this.uploadBuffer, this.chunkPos);
+      this.chunkPos += data.length;
+      if (this.chunkPos >= this.chunkSize) {
+        this.isReading = false;
+        this.remainingBuffer = data.slice(data.length - (this.chunkPos - this.chunkSize));
+        this.sendChunk();
+        break;
+      }
+    }
+  }
 }

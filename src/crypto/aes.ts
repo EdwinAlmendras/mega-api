@@ -1,7 +1,65 @@
-/* eslint-disable */
 // @ts-ignore
 // @ts-nocheck
 import crypto from "crypto";
+// MEGA's MAC implementation is similar to ECBC-MAC
+// but because it encrypts the MAC twice it's weird,
+// also implementing it natively is slower.
+export class MAC {
+  constructor (aes, nonce) {
+    this.key = aes.encrypt.key
+    this.nonce = nonce.slice(0, 8)
+    this.macCipher = crypto.createCipheriv('aes-128-ecb', this.key, Buffer.alloc(0))
+
+    this.posNext = this.increment = 131072 // 2**17
+    this.pos = 0
+
+    this.macs = []
+    this.mac = Buffer.alloc(16)
+    this.nonce.copy(this.mac, 0)
+    this.nonce.copy(this.mac, 8)
+  }
+
+  condense () {
+    if (this.mac) {
+      this.macs.push(this.mac)
+      this.mac = undefined
+    }
+
+    let mac = Buffer.alloc(16, 0)
+
+    for (const item of this.macs) {
+      for (let j = 0; j < 16; j++) mac[j] ^= item[j]
+      mac = this.macCipher.update(mac)
+    }
+
+    const macBuffer = Buffer.allocUnsafe(8)
+    macBuffer.writeInt32BE(mac.readInt32BE(0) ^ mac.readInt32BE(4), 0)
+    macBuffer.writeInt32BE(mac.readInt32BE(8) ^ mac.readInt32BE(12), 4)
+    return macBuffer
+  }
+
+  update (buffer) {
+    for (let i = 0; i < buffer.length; i += 16) {
+      for (let j = 0; j < 16; j++) this.mac[j] ^= buffer[i + j]
+      this.mac = this.macCipher.update(this.mac)
+      this.checkBounding()
+    }
+  }
+
+  checkBounding () {
+    this.pos += 16
+    if (this.pos >= this.posNext) {
+      this.macs.push(Buffer.from(this.mac))
+      this.nonce.copy(this.mac, 0)
+      this.nonce.copy(this.mac, 8)
+
+      if (this.increment < 1048576) {
+        this.increment += 131072
+      }
+      this.posNext += this.increment
+    }
+  }
+}
 
 export class AES$Encrypt {
   constructor(public key = key) { }
@@ -66,6 +124,9 @@ export class AES$Decrypt {
   }
 }
 export class AES {
+  encryptCBC(at: any) {
+    throw new Error("Method not implemented.");
+  }
   encrypt: AES$Encrypt
   decrypt: AES$Decrypt
   key: Buffer

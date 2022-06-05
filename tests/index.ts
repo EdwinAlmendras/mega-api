@@ -1,29 +1,36 @@
-import { createWriteStream, writeFile, writeFileSync } from "fs";
+import { createReadStream, createWriteStream, statSync, writeFile, writeFileSync } from "fs";
 import { MegaClient } from "../src/core";
 
 //2108uhevdws@yopmail.com
 async function main() {
   try {
     const client = new MegaClient();
-    /*  await client.account.login({
+    /*      await client.account.login({
       email: "wixotad365@activesniper.com",
       password: "wixotad365@activesniper.com",
       fetch: true,
       saveSession: true,
-    });
- */
-    await client.account.resumeSession();
-    client.api.on("request", (data) => console.log(data));
-    const filename = "01.mp4"
-    const absolutePAth = client.files.getAbsolutePathByName(filename)
-    console.log(absolutePAth)
-   /*  const [resp] = await client.files.getThumbs({ nodes: [file.nodeId], previewType: "preview"})
- */
-   // const buffer = await client.files.getThumbnail({ nodeId: file.nodeId })
+    }); */
 
-   /*  writeFileSync("ok.jpg", resp.data)
+    await client.account.resumeSession();
+    /*     client.api.on("request", (data) => console.log(data));
+    const filename = "01.mp4";
+    const absolutePAth = client.files.getAbsolutePathByName(filename);
+    console.log(absolutePAth); */
+
+    const filePath = "./files/0026.mp4";
+    const size = statSync(filePath).size;
+    const stream = createReadStream(filePath, { highWaterMark: 1024 * 1024 });
+     await client.files.upload({ source: stream, size ,properties: { name: "0026.mp4"}, target: "root" });
+
+
+    /*  const [resp] = await client.files.getThumbs({ nodes: [file.nodeId], previewType: "preview"})
      */
- /*    const { data } = await client.files.getSource({
+    // const buffer = await client.files.getThumbnail({ nodeId: file.nodeId })
+
+    /*  writeFileSync("ok.jpg", resp.data)
+     */
+    /*    const { data } = await client.files.getSource({
       nodeId: file.nodeId,
     });
     const w = createWriteStream(filename);

@@ -45,6 +45,7 @@ export default class Properties {
     }
   }
 
+
   static parse(attrs): Schema$Properties {
     const { n, lbl, fav, folderColorRgb, target, videoMediaMetadata, ...props } = attrs;
     const properties = {
@@ -52,16 +53,13 @@ export default class Properties {
       label: LABEL_NAMES[lbl || 0],
       starred: !!fav,
       folderColorRgb: folderColorRgb || "white",
+      mimeType: mime.lookup(n),
       ...props,
     };
-    target && (properties.target = target);
-    properties.mimeType = target ? "application/shortcut" : mime.lookup(n);
-    videoMediaMetadata && (properties.videoMediaMetadata = JSON.parse(videoMediaMetadata));
-
-
     return properties;
   }
 
+  
   static unpack(attrs: Buffer): JSON | Error {
     let end = 0;
     while (end < attrs.length && attrs.readUInt8(end)) end++;
@@ -71,6 +69,16 @@ export default class Properties {
     } catch (error) {
       return new Error("Somithing wrong parsing JSON, tried with " + attrs);
     }
+  }
+
+  static encrypt(properties: GenericObject, key: Buffer):Buffer {
+    const unparsed = this.unparse(properties)
+    console.log(unparsed, "unparsed")
+    const packed = this.pack(unparsed);
+    console.log(packed)
+    const encProperties = getCipher(key).encrypt.cbc(packed);
+    console.log(encProperties)
+    return encProperties
   }
   static unparse(attrs: Schema$Properties): GenericObject {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -89,6 +97,7 @@ export default class Properties {
    */
   static pack(attrs: GenericObject): Buffer {
     const at = Buffer.from(`MEGA${JSON.stringify(attrs)}`);
+    console.log(at)
     const ret = Buffer.alloc(Math.ceil(at.length / 16) * 16);
     at.copy(ret);
     return ret;

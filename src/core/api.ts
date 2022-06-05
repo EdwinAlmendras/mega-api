@@ -139,7 +139,7 @@ export class MegaApiClient extends EventEmitter {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     async function retry() {
-      const response = await self.request(data, { retryno: retryno + 1 });
+      const response = await self.request(obj, { retryno: retryno + 1 });
       Promise.resolve(response);
     }
   }

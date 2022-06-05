@@ -1,15 +1,13 @@
 /* eslint-disable valid-jsdoc */
 import {Transform} from "stream";
-import {mergeKeyMac, AES, CTR, getCipher} from "./";
+import {mergeKeyMac, AES, CTR, getCipher, MAC} from "./";
 import pumpify from "pumpify"
 /**
  *
  * @param {Buffer} key its buffer
- * @param {Object} param1 sdasd
  * @return encrypter
  */
-export function createEncrypterStream(key: Buffer, {start}:
-{ start?: number}): MegaEncrypt {
+export function createEncrypterStream(key: Buffer, start = 0): MegaEncrypt {
   start = !start && 0;
   const megaEncrypter = new MegaEncrypt({key,
     start});
@@ -21,14 +19,49 @@ export function createEncrypterStream(key: Buffer, {start}:
   return megaEncrypter;
 }
 
+export function megaEncrypt (key, {start}: {start?: number} = {}) {
+  start||= 0
+  if (start !== 0) throw Error('Encryption cannot start midstream otherwise MAC verification will fail.')
+
+  if (!(key instanceof Buffer)) {
+    key = Buffer.from(key)
+  }
+
+  console.log({key})
+
+  let stream: any = new Transform({
+    transform (chunk, encoding, callback) {
+      mac.update(chunk)
+      const data = ctr.encrypt(chunk)
+      callback(null, Buffer.from(data))
+    },
+    flush (callback) {
+      stream.mac = mac.condense()
+      stream.key = mergeKeyMac(key, stream.mac)
+      callback()
+    }
+  })
+
+  if (key.length !== 24) throw Error('Wrong key length. Key must be 192bit.')
+
+  const aes = new AES(key.slice(0, 16))
+  const ctr = new CTR(aes, key.slice(16), start)
+  const mac = new MAC(aes, key.slice(16))
+
+  //stream = pumpify(chunkSizeSafe(16), stream)
+  return stream
+}
+
+
+
 export class MegaEncrypt extends Transform {
   aes: AES;
   ctr: CTR;
   key: Buffer
   constructor({key, start}) {
     super();
-    this.aes = new AES(key.slice(0, 16));
-    this.ctr = new CTR(this.aes, key.slice(16), start);
+    this.aes = new AES(key.slice(0, 16)); //new AES(key.slice(0, 16));
+    this.ctr = new CTR(this.aes, key.slice(16), 0/* start */);
   }
   _transform(chunk: Buffer, encoding: string, cb: () => void): void {
     const chunked = this.ctr.encrypt(chunk);
@@ -37,20 +70,6 @@ export class MegaEncrypt extends Transform {
   }
 }
 
-/*
-CREATE ENCRYPTER STREAM WITH KEY
-*/
-export function createDecrypterStream(key: Buffer): MegaDecrypt {
-  const megaDecrypter = new MegaDecrypt({key});
-  /*   megaDecrypter.on("end", () => {
-      const mac = megaDecrypter.ctr.condensedMac();
-      if (!mac.equals(key.slice(24)) && !disableVerification) {
-        reject("MAC verification failed");
-      }
-    }); */
-  // megaDecrypter = combine(b2s(randomBytes(16)), megaDecrypter);
-  return (megaDecrypter);
-}
 
 export class MegaDecrypt extends Transform {
   aes: AES;
@@ -65,7 +84,20 @@ export class MegaDecrypt extends Transform {
     cb();
   }
 }
-
+/*
+CREATE ENCRYPTER STREAM WITH KEY
+*/
+export function createDecrypterStream(key: Buffer): MegaDecrypt {
+  const megaDecrypter = new MegaDecrypt({key});
+  /*   megaDecrypter.on("end", () => {
+      const mac = megaDecrypter.ctr.condensedMac();
+      if (!mac.equals(key.slice(24)) && !disableVerification) {
+        reject("MAC verification failed");
+      }
+    }); */
+  // megaDecrypter = combine(b2s(randomBytes(16)), megaDecrypter);
+  return (megaDecrypter);
+}
 
 export function megaDecrypt (key, options = { disableVerification: true, start: 0}) {
   const start = options.start || 0

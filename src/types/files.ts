@@ -1,5 +1,6 @@
 import { ResponseType, AxiosRequestConfig } from "axios";
 import { PathLike } from "fs";
+import { Readable } from "stream";
 
 export type SSL = 0 | 1;
 
@@ -14,9 +15,9 @@ export interface Params$Update {
   properties: any;
 }
 export interface Uplaod$Params {
-  path?: PathLike;
+  stream: Readable;
+  size: number;
   properties?: Schema$Properties;
-  url?: string;
   options?: OptionsUplaod;
 }
 
